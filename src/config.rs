@@ -1,5 +1,7 @@
 use std::{
     env, fs,
+    io::Write,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -119,15 +121,29 @@ impl Config {
     pub fn save_user_policy(policy: &PolicyConfig) -> Result<()> {
         policy.validate()?;
         let path = Self::user_path();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        Self::save_user_policy_at(&path, policy)
+    }
+
+    fn save_user_policy_at(path: &Path, policy: &PolicyConfig) -> Result<()> {
+        let parent = path.parent().context("user policy path has no parent")?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("failed to protect {}", parent.display()))?;
         let text = toml::to_string_pretty(&UserConfig {
             policy: policy.clone(),
         })?;
-        let temporary = path.with_extension("toml.tmp");
-        fs::write(&temporary, text)?;
-        fs::rename(&temporary, &path)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)
+            .with_context(|| format!("failed to create temporary file in {}", parent.display()))?;
+        temporary
+            .as_file()
+            .set_permissions(fs::Permissions::from_mode(0o600))?;
+        temporary.write_all(text.as_bytes())?;
+        temporary.as_file().sync_all()?;
+        temporary
+            .persist(path)
+            .map_err(|error| error.error)
+            .with_context(|| format!("failed to replace {}", path.display()))?;
         Ok(())
     }
 
@@ -323,6 +339,42 @@ away_values = [1]
         assert_eq!(
             invalid.validate().unwrap_err().to_string(),
             "OSD text must not exceed 120 characters"
+        );
+    }
+
+    #[test]
+    fn saved_user_policy_is_private_and_atomically_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().join("thinkpad-hpd");
+        let path = parent.join("config.toml");
+        Config::save_user_policy_at(&path, &PolicyConfig::default()).unwrap();
+
+        assert_eq!(
+            fs::metadata(&parent).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::read_dir(&parent).unwrap().count(),
+            1,
+            "temporary files must not remain after a successful save"
+        );
+
+        let replacement = PolicyConfig {
+            enabled: false,
+            ..PolicyConfig::default()
+        };
+        Config::save_user_policy_at(&path, &replacement).unwrap();
+        let saved: super::UserConfig = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(!saved.policy.enabled);
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
         );
     }
 }

@@ -36,6 +36,10 @@ frontend over the same Rust CLI. Lock and wake use the standard
 `org.freedesktop.ScreenSaver` D-Bus interface. Plasma OSD and PowerDevil screen
 off support are optional enhancements.
 
+Policy saves use an atomic same-directory replacement. The policy directory is
+kept at mode `0700` and the file at `0600`, preventing other local users from
+reading or replacing desktop automation settings.
+
 When HPD locks the screen, the agent records ownership in the per-login runtime
 directory. A restarted agent can therefore preserve the default return-to-wake
 behavior without treating unrelated manual locks as HPD locks. The marker is
