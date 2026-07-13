@@ -27,6 +27,7 @@ class HpdSettings final : public KQuickConfigModule
     Q_PROPERTY(QString awayText MEMBER m_awayText NOTIFY settingsChanged)
     Q_PROPERTY(bool screenOffSupported MEMBER m_screenOffSupported NOTIFY settingsChanged)
     Q_PROPERTY(QString diagnosticSummary MEMBER m_diagnosticSummary NOTIFY settingsChanged)
+    Q_PROPERTY(QString effectiveModeSummary MEMBER m_effectiveModeSummary NOTIFY settingsChanged)
     Q_PROPERTY(bool serviceReady MEMBER m_serviceReady NOTIFY settingsChanged)
     Q_PROPERTY(QString serviceSummary MEMBER m_serviceSummary NOTIFY settingsChanged)
     Q_PROPERTY(QString operationError MEMBER m_operationError NOTIFY settingsChanged)
@@ -78,6 +79,8 @@ public:
         const auto reason = diagnosticObject[QStringLiteral("screen_off_block_reason")].toString();
         const auto sensorAvailable = diagnosticObject[QStringLiteral("sensor")].toObject()[QStringLiteral("available")].toBool(false);
         m_diagnosticSummary = sensorAvailable ? i18n("Presence sensor detected") : i18n("Presence sensor unavailable");
+        const auto effectiveMode = diagnosticObject[QStringLiteral("effective_policy")].toObject()[QStringLiteral("mode")].toString();
+        m_effectiveModeSummary = i18n("Effective mode: %1", localizedMode(effectiveMode));
         if (!reason.isEmpty()) {
             m_diagnosticSummary += QStringLiteral(". ")
                 + i18n("Automatic display power-off is blocked on AMDGPU Wayland after observed display failures.");
@@ -143,6 +146,35 @@ public:
 Q_SIGNALS:
     void settingsChanged();
 private:
+    static QString localizedMode(const QString &mode)
+    {
+        if (mode == QStringLiteral("disabled")) {
+            return i18n("Disabled");
+        }
+        if (mode == QStringLiteral("dry-run")) {
+            return i18n("Simulation only");
+        }
+        if (mode == QStringLiteral("wake-only")) {
+            return i18n("Wake only");
+        }
+        if (mode == QStringLiteral("lock-and-wake")) {
+            return i18n("Lock and wake");
+        }
+        if (mode == QStringLiteral("lock-only")) {
+            return i18n("Lock only");
+        }
+        if (mode == QStringLiteral("wake-and-osd")) {
+            return i18n("Wake and on-screen status");
+        }
+        if (mode == QStringLiteral("osd-only")) {
+            return i18n("On-screen status only");
+        }
+        if (mode == QStringLiteral("monitor-only")) {
+            return i18n("Monitor only");
+        }
+        return i18n("Unavailable");
+    }
+
     static bool runCommand(const QString &program, const QStringList &arguments, QByteArray *standardOutput,
         QString *errorText, bool acceptNonZeroExit = false)
     {
@@ -181,6 +213,7 @@ private:
     QString m_presentText, m_awayText;
     bool m_screenOffSupported = false;
     QString m_diagnosticSummary;
+    QString m_effectiveModeSummary;
     bool m_serviceReady = false;
     QString m_serviceSummary;
     QString m_operationError;

@@ -118,6 +118,9 @@ translations are included. Additional languages can be added as
 External CLI and systemd operations in the KCM have bounded waits and report
 localized inline errors instead of silently failing or freezing System
 Settings.
+The KCM also presents the backend's effective mode summary, so combinations
+such as wake-only, lock-and-wake, dry-run and disabled are visible without
+manually interpreting every checkbox.
 
 See [docs/analysis.md](docs/analysis.md) for the hardware protocol, kernel and
 `iio-sensor-proxy` compatibility analysis.

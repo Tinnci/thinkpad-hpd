@@ -108,3 +108,33 @@ msgstr "命令执行超时"
 
 msgid "Command exited with status %1"
 msgstr "命令退出，状态码为 %1"
+
+msgid "Effective mode: %1"
+msgstr "有效模式：%1"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Simulation only"
+msgstr "仅模拟"
+
+msgid "Wake only"
+msgstr "仅唤醒"
+
+msgid "Lock and wake"
+msgstr "锁屏并唤醒"
+
+msgid "Lock only"
+msgstr "仅锁屏"
+
+msgid "Wake and on-screen status"
+msgstr "唤醒并显示屏幕状态"
+
+msgid "On-screen status only"
+msgstr "仅显示屏幕状态"
+
+msgid "Monitor only"
+msgstr "仅监测"
+
+msgid "Unavailable"
+msgstr "不可用"
