@@ -173,8 +173,9 @@ impl PolicyConfig {
             "OSD cooldown must be between 0 and 300 seconds"
         );
         anyhow::ensure!(
-            self.osd_present_text.len() <= 120 && self.osd_away_text.len() <= 120,
-            "OSD text must not exceed 120 bytes"
+            self.osd_present_text.chars().count() <= 120
+                && self.osd_away_text.chars().count() <= 120,
+            "OSD text must not exceed 120 characters"
         );
         Ok(())
     }
@@ -254,7 +255,7 @@ impl SensorConfig {
 mod tests {
     use std::fs;
 
-    use super::{Config, SensorConfig};
+    use super::{Config, PolicyConfig, SensorConfig};
 
     #[test]
     fn default_mapping_matches_thinkpad_firmware() {
@@ -303,6 +304,25 @@ away_values = [1]
         assert_eq!(
             Config::load(&path).unwrap_err().to_string(),
             "sensor present and away values must not overlap"
+        );
+    }
+
+    #[test]
+    fn osd_text_limit_counts_unicode_characters() {
+        let valid = PolicyConfig {
+            osd_present_text: "人".repeat(120),
+            osd_away_text: "离".repeat(120),
+            ..PolicyConfig::default()
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = PolicyConfig {
+            osd_present_text: "人".repeat(121),
+            ..PolicyConfig::default()
+        };
+        assert_eq!(
+            invalid.validate().unwrap_err().to_string(),
+            "OSD text must not exceed 120 characters"
         );
     }
 }
