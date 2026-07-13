@@ -6,12 +6,19 @@ away_values = [2]
 buffer_length = 16
 
 [policy]
+enabled = true
+dry_run = true
+lock_screen = true
 away_confirm_seconds = 15
 idle_confirm_seconds = 15
+startup_grace_seconds = 10
 present_confirm_milliseconds = 750
 osd_confirm_milliseconds = 1000
-turn_off_screen = true
+turn_off_screen = false
+screen_off_delay_milliseconds = 750
 wake_screen = true
+wake_manual_lock = false
 show_osd = true
+osd_cooldown_seconds = 5
 osd_present_text = "HPD: 检测到用户"
 osd_away_text = "HPD: 用户已离开"

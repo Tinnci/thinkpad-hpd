@@ -1,0 +1,92 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: thinkpad-hpd 0.1.0\n"
+"PO-Revision-Date: 2026-07-13 22:30+0800\n"
+"Last-Translator: thinkpad-hpd contributors\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Human presence:"
+msgstr "人体存在："
+
+msgid "Enable presence automation"
+msgstr "启用人体存在自动化"
+
+msgid "Simulation only (do not control the desktop)"
+msgstr "仅模拟（不控制桌面）"
+
+msgid "Presence sensor detected"
+msgstr "已检测到人体存在传感器"
+
+msgid "Presence sensor unavailable"
+msgstr "人体存在传感器不可用"
+
+msgid "Automatic display power-off is blocked on AMDGPU Wayland after observed display failures."
+msgstr "检测到显示故障记录，已在 AMDGPU Wayland 环境中阻止自动关闭显示器。"
+
+msgid "Away behavior"
+msgstr "离开时的行为"
+
+msgid "Lock screen automatically"
+msgstr "自动锁定屏幕"
+
+msgid "Away confirmation (seconds):"
+msgstr "离开确认时间（秒）："
+
+msgid "Input idle time (seconds):"
+msgstr "输入空闲时间（秒）："
+
+msgid "Startup grace (seconds):"
+msgstr "启动宽限时间（秒）："
+
+msgid "Turn off display after locking"
+msgstr "锁屏后关闭显示器"
+
+msgid "Display-off delay (ms):"
+msgstr "关闭显示器延时（毫秒）："
+
+msgid "Return behavior"
+msgstr "返回时的行为"
+
+msgid "Wake lock screen when presence returns"
+msgstr "检测到用户返回时唤醒锁屏界面"
+
+msgid "Also wake screens locked manually"
+msgstr "同时唤醒手动锁定的屏幕"
+
+msgid "Return confirmation (ms):"
+msgstr "返回确认时间（毫秒）："
+
+msgid "On-screen status"
+msgstr "屏幕状态提示"
+
+msgid "Show presence status"
+msgstr "显示人体存在状态"
+
+msgid "Status delay (ms):"
+msgstr "状态提示延时（毫秒）："
+
+msgid "Minimum interval (seconds):"
+msgstr "最短提示间隔（秒）："
+
+msgid "Present message:"
+msgstr "用户在场提示："
+
+msgid "Away message:"
+msgstr "用户离开提示："
+
+msgid "active"
+msgstr "运行中"
+
+msgid "inactive"
+msgstr "未运行"
+
+msgid "masked"
+msgstr "已屏蔽"
+
+msgid "Sensor service: %1; desktop agent: %2"
+msgstr "传感器服务：%1；桌面代理：%2"

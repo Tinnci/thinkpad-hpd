@@ -151,16 +151,13 @@ pub async fn run_daemon(config: Config) -> Result<()> {
                 sample = sample_rx.recv() => {
                     let Some(sample) = sample else { break; };
                     let raw = sample.context("IIO reader failed")?;
-                    let classified = config.sensor.classify(raw);
-                    if classified.is_none() {
+                    let Some(present) = config.sensor.classify(raw) else {
                         warn!(raw, "ignoring unmapped presence value");
-                    }
-                    let present = classified.unwrap_or_else(|| {
-                        state.read().expect("presence state lock poisoned").present
-                    });
+                        continue;
+                    };
                     let changed = {
                         let mut current = state.write().expect("presence state lock poisoned");
-                        let changed = current.raw != raw || classified != last_classified;
+                        let changed = current.raw != raw || Some(present) != last_classified;
                         current.available = true;
                         current.raw = raw;
                         current.present = present;
@@ -189,7 +186,7 @@ pub async fn run_daemon(config: Config) -> Result<()> {
                     } else {
                         debug!(raw, present, "presence sample");
                     }
-                    last_classified = classified;
+                    last_classified = Some(present);
                 }
                 _ = shutdown_signal() => {
                     info!("shutdown requested");

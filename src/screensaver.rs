@@ -1,3 +1,5 @@
+use std::{env, fs};
+
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 use zbus::{Connection, Proxy};
@@ -67,6 +69,12 @@ impl ScreenController {
     }
 
     pub async fn turn_off_screen(&self) {
+        if !automatic_screen_off_supported() {
+            warn!(
+                "refusing automatic display power-off on AMDGPU Wayland due to pageflip/DMCUB crash risk"
+            );
+            return;
+        }
         let result = async {
             let proxy = Proxy::new(
                 &self.connection,
@@ -106,5 +114,40 @@ impl ScreenController {
         if let Err(error) = result {
             warn!(%error, "failed to display the KDE presence OSD");
         }
+    }
+}
+
+pub fn automatic_screen_off_supported() -> bool {
+    automatic_screen_off_block_reason().is_none()
+}
+
+pub fn automatic_screen_off_block_reason() -> Option<&'static str> {
+    if env::var("XDG_SESSION_TYPE")
+        .map(|value| value != "wayland")
+        .unwrap_or(true)
+    {
+        return None;
+    }
+    let Ok(entries) = fs::read_dir("/sys/class/drm") else {
+        return None;
+    };
+    let amd_gpu = entries.flatten().any(|entry| {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        name.starts_with("card")
+            && !name.contains('-')
+            && fs::read_to_string(entry.path().join("device/vendor"))
+                .map(|vendor| vendor.trim().eq_ignore_ascii_case("0x1002"))
+                .unwrap_or(false)
+    });
+    amd_gpu.then_some("automatic display power-off is blocked on AMDGPU Wayland after observed DMCUB/pageflip failures")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn screen_off_guard_is_conservative_without_wayland_environment() {
+        unsafe { std::env::remove_var("XDG_SESSION_TYPE") };
+        assert!(super::automatic_screen_off_supported());
     }
 }

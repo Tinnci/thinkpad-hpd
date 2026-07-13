@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "kcm_thinkpadhpd",
+    "Name": "Human Presence Detection",
+    "Name[zh_CN]": "人体存在检测",
+    "Description": "Configure presence-based screen locking and wake behavior",
+    "Description[zh_CN]": "配置基于人体存在状态的锁屏与唤醒行为",
+    "Icon": "preferences-system-privacy"
+  },
+  "X-KDE-System-Settings-Parent-Category": "security-privacy",
+  "X-KDE-Keywords": "presence,hpd,sensor,lock,wake,privacy"
+}
