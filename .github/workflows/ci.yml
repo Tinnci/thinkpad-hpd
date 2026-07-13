@@ -9,7 +9,7 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
@@ -21,6 +21,15 @@ jobs:
   translations:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sudo apt-get update && sudo apt-get install -y gettext
       - run: msgfmt --check --check-format -o /tmp/kcm_thinkpadhpd.mo kcm/po/zh_CN/kcm_thinkpadhpd.po
+
+  kcm:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm git cmake ninja extra-cmake-modules qt6-declarative kcmutils ki18n kcoreaddons gettext
+      - uses: actions/checkout@v5
+      - run: cmake -S kcm -B build-kcm -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+      - run: cmake --build build-kcm
