@@ -54,6 +54,10 @@ wake or whenever the session is observed unlocked.
 Screen lock state queries fail closed: an unavailable ScreenSaver D-Bus state
 never triggers a lock or wake action and never clears lock ownership. Initial
 state failure causes the bounded systemd restart policy to retry the agent.
+Once a present user is confirmed to have an unlocked screen, that return cycle
+is considered complete. A later manual lock while presence remains unchanged
+is not immediately undone; wake is re-armed only by a new away-to-present
+transition.
 
 The IIO udev rule starts the system daemon when compatible hardware appears,
 so the system unit can be active while its install state is `disabled`. Mask

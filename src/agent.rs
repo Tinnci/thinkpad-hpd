@@ -234,6 +234,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     } else if !screen_locked {
                         lock_marker.clear()?;
                         locked_by_hpd = false;
+                        wake_requested = true;
                     }
                 }
             }
