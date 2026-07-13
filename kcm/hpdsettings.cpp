@@ -84,7 +84,7 @@ public:
         agentState.start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("is-active"), QStringLiteral("thinkpad-hpd-agent.service")});
         agentState.waitForFinished();
         const bool agentActive = agentState.exitCode() == 0;
-        m_serviceReady = daemonActive && agentActive;
+        m_serviceReady = daemonActive && (!m_enabled || agentActive);
         const QString daemonText = daemonMasked ? i18n("masked") : (daemonActive ? i18n("active") : i18n("inactive"));
         const QString agentText = agentActive ? i18n("active") : i18n("inactive");
         m_serviceSummary = i18n("Sensor service: %1; desktop agent: %2", daemonText, agentText);
@@ -108,12 +108,17 @@ public:
             QStringLiteral("--json"), QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact))});
         process.waitForFinished();
         if (process.exitCode() == 0) {
-            if (m_enabled) {
-                QProcess::execute(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")});
+            const QStringList serviceArguments = m_enabled
+                ? QStringList{QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")}
+                : QStringList{QStringLiteral("--user"), QStringLiteral("disable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")};
+            const int serviceResult = QProcess::execute(QStringLiteral("systemctl"), serviceArguments);
+            if (serviceResult == 0) {
+                setNeedsSave(false);
+                load();
             } else {
-                QProcess::execute(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("try-restart"), QStringLiteral("thinkpad-hpd-agent.service")});
+                qWarning() << "Failed to update HPD desktop agent state, exit code:" << serviceResult;
+                setNeedsSave(true);
             }
-            setNeedsSave(false);
         } else {
             qWarning() << "Failed to save HPD settings:" << process.readAllStandardError();
             setNeedsSave(true);

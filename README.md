@@ -39,7 +39,9 @@ off support are optional enhancements.
 The IIO udev rule starts the system daemon when compatible hardware appears,
 so the system unit can be active while its install state is `disabled`. Mask
 the unit to prevent hardware activation. The user agent is managed separately
-with `systemctl --user`.
+with `systemctl --user`. The KCM master switch enables and starts the user
+agent when automation is enabled, and stops and disables it when automation is
+disabled; the privileged sensor service remains available for diagnostics.
 
 Sensor values not listed in `present_values` or `away_values` are treated as
 unmapped. They are logged for diagnostics but never published as a presence
