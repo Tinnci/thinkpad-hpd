@@ -184,8 +184,11 @@ pub async fn run_agent(config: Config) -> Result<()> {
                             if config.policy.dry_run {
                                 info!("dry-run: would request screen lock");
                             } else {
-                                controller.lock().await?;
                                 lock_marker.mark()?;
+                                if let Err(error) = controller.lock().await {
+                                    lock_marker.clear()?;
+                                    return Err(error);
+                                }
                             }
                             lock_requested = true;
                             locked_by_hpd = true;

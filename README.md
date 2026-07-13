@@ -43,7 +43,9 @@ reading or replacing desktop automation settings.
 When HPD locks the screen, the agent records ownership in the per-login runtime
 directory. A restarted agent can therefore preserve the default return-to-wake
 behavior without treating unrelated manual locks as HPD locks. The marker is
-removed after wake or whenever the session is observed unlocked.
+written before the lock request and rolled back if that request fails, closing
+the crash window between locking and recording ownership. It is removed after
+wake or whenever the session is observed unlocked.
 
 The IIO udev rule starts the system daemon when compatible hardware appears,
 so the system unit can be active while its install state is `disabled`. Mask
