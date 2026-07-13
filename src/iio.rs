@@ -179,7 +179,7 @@ impl IioBuffer {
     pub fn open(sensor: SensorPaths, length: u32) -> Result<Self> {
         write_sysfs(&sensor.buffer_enable, "0")?;
         write_sysfs(&sensor.scan_enable, "1")?;
-        write_sysfs(&sensor.buffer_length, &length.max(2).to_string())?;
+        write_sysfs(&sensor.buffer_length, &length.to_string())?;
         if let Err(error) = write_sysfs(&sensor.buffer_enable, "1") {
             let _ = write_sysfs(&sensor.scan_enable, "0");
             return Err(error);

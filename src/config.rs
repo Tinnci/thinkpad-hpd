@@ -82,12 +82,15 @@ impl Default for PolicyConfig {
 
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-        let text = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))
+        let config = if path.exists() {
+            let text = fs::read_to_string(path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?
+        } else {
+            Self::default()
+        };
+        config.validate()?;
+        Ok(config)
     }
 
     pub fn load_for_agent(system_path: &Path) -> Result<Self> {
@@ -129,6 +132,7 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<()> {
+        self.sensor.validate()?;
         self.policy.validate()
     }
 }
@@ -205,6 +209,36 @@ impl PolicyConfig {
 }
 
 impl SensorConfig {
+    pub fn validate(&self) -> Result<()> {
+        anyhow::ensure!(
+            !self.sysfs_name.trim().is_empty(),
+            "sensor sysfs name must not be empty"
+        );
+        anyhow::ensure!(
+            !self.platform_match.trim().is_empty(),
+            "sensor platform match must not be empty"
+        );
+        anyhow::ensure!(
+            !self.present_values.is_empty(),
+            "sensor present values must not be empty"
+        );
+        anyhow::ensure!(
+            !self.away_values.is_empty(),
+            "sensor away values must not be empty"
+        );
+        anyhow::ensure!(
+            self.present_values
+                .iter()
+                .all(|value| !self.away_values.contains(value)),
+            "sensor present and away values must not overlap"
+        );
+        anyhow::ensure!(
+            (2..=4096).contains(&self.buffer_length),
+            "sensor buffer length must be between 2 and 4096"
+        );
+        Ok(())
+    }
+
     pub fn classify(&self, raw: i32) -> Option<bool> {
         if self.present_values.contains(&raw) {
             Some(true)
@@ -218,7 +252,9 @@ impl SensorConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::SensorConfig;
+    use std::fs;
+
+    use super::{Config, SensorConfig};
 
     #[test]
     fn default_mapping_matches_thinkpad_firmware() {
@@ -226,5 +262,47 @@ mod tests {
         assert_eq!(config.classify(1), Some(true));
         assert_eq!(config.classify(2), Some(false));
         assert_eq!(config.classify(0), None);
+    }
+
+    #[test]
+    fn rejects_overlapping_sensor_mappings() {
+        let mut config = SensorConfig::default();
+        config.away_values.push(1);
+        assert_eq!(
+            config.validate().unwrap_err().to_string(),
+            "sensor present and away values must not overlap"
+        );
+    }
+
+    #[test]
+    fn rejects_empty_sensor_mappings_and_invalid_buffer_lengths() {
+        let mut config = SensorConfig::default();
+        config.present_values.clear();
+        assert!(config.validate().is_err());
+
+        let config = SensorConfig {
+            buffer_length: 1,
+            ..SensorConfig::default()
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn system_config_is_validated_when_loaded() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            r#"
+[sensor]
+present_values = [1]
+away_values = [1]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            Config::load(&path).unwrap_err().to_string(),
+            "sensor present and away values must not overlap"
+        );
     }
 }
