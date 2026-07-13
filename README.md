@@ -36,6 +36,10 @@ frontend over the same Rust CLI. Lock and wake use the standard
 `org.freedesktop.ScreenSaver` D-Bus interface. Plasma OSD and PowerDevil screen
 off support are optional enhancements.
 
+`diagnose` includes an `effective_policy` object that resolves the master
+switch, dry-run state, input monitoring, manual-lock wake opt-in and the
+AMDGPU screen-off safety gate into the actions the agent can actually take.
+
 Policy saves use an atomic same-directory replacement. The policy directory is
 kept at mode `0700` and the file at `0600`, preventing other local users from
 reading or replacing desktop automation settings.

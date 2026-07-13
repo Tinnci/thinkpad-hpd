@@ -265,6 +265,53 @@ fn should_monitor_input(policy: &crate::config::PolicyConfig) -> bool {
     policy.enabled && policy.lock_screen
 }
 
+#[derive(Debug, Serialize)]
+pub struct EffectivePolicy {
+    pub mode: &'static str,
+    pub live: bool,
+    pub dry_run: bool,
+    pub input_monitor: bool,
+    pub lock_screen: bool,
+    pub turn_off_screen: bool,
+    pub wake_screen: bool,
+    pub wake_manual_lock: bool,
+    pub show_osd: bool,
+}
+
+pub fn effective_policy(
+    policy: &crate::config::PolicyConfig,
+    screen_off_supported: bool,
+) -> EffectivePolicy {
+    let lock_screen = policy.enabled && policy.lock_screen;
+    let wake_screen = policy.enabled && policy.wake_screen;
+    let show_osd = policy.enabled && policy.show_osd;
+    let mode = if !policy.enabled {
+        "disabled"
+    } else if policy.dry_run {
+        "dry-run"
+    } else {
+        match (lock_screen, wake_screen, show_osd) {
+            (true, true, _) => "lock-and-wake",
+            (true, false, _) => "lock-only",
+            (false, true, false) => "wake-only",
+            (false, true, true) => "wake-and-osd",
+            (false, false, true) => "osd-only",
+            (false, false, false) => "monitor-only",
+        }
+    };
+    EffectivePolicy {
+        mode,
+        live: policy.enabled && !policy.dry_run,
+        dry_run: policy.dry_run,
+        input_monitor: should_monitor_input(policy),
+        lock_screen,
+        turn_off_screen: lock_screen && policy.turn_off_screen && screen_off_supported,
+        wake_screen,
+        wake_manual_lock: wake_screen && policy.wake_manual_lock,
+        show_osd,
+    }
+}
+
 fn presence_deadlines(
     available: bool,
     present: bool,
@@ -371,8 +418,8 @@ mod tests {
     use crate::config::PolicyConfig;
 
     use super::{
-        LockMarker, presence_deadlines, should_lock, should_monitor_input, should_show_osd,
-        should_wake,
+        LockMarker, effective_policy, presence_deadlines, should_lock, should_monitor_input,
+        should_show_osd, should_wake,
     };
 
     #[test]
@@ -437,6 +484,53 @@ mod tests {
         policy.lock_screen = true;
         policy.enabled = false;
         assert!(!should_monitor_input(&policy));
+    }
+
+    #[test]
+    fn effective_policy_reports_wake_only_mode() {
+        let policy = PolicyConfig {
+            enabled: true,
+            dry_run: false,
+            lock_screen: false,
+            turn_off_screen: true,
+            wake_screen: true,
+            wake_manual_lock: true,
+            show_osd: false,
+            ..PolicyConfig::default()
+        };
+        let effective = effective_policy(&policy, false);
+        assert_eq!(effective.mode, "wake-only");
+        assert!(effective.live);
+        assert!(!effective.input_monitor);
+        assert!(!effective.lock_screen);
+        assert!(!effective.turn_off_screen);
+        assert!(effective.wake_screen);
+        assert!(effective.wake_manual_lock);
+        assert!(!effective.show_osd);
+    }
+
+    #[test]
+    fn effective_policy_distinguishes_disabled_and_dry_run() {
+        let disabled = PolicyConfig {
+            enabled: false,
+            ..PolicyConfig::default()
+        };
+        let effective = effective_policy(&disabled, true);
+        assert_eq!(effective.mode, "disabled");
+        assert!(!effective.live);
+        assert!(!effective.input_monitor);
+        assert!(!effective.lock_screen);
+        assert!(!effective.wake_screen);
+        assert!(!effective.show_osd);
+
+        let dry_run = PolicyConfig::default();
+        let effective = effective_policy(&dry_run, true);
+        assert_eq!(effective.mode, "dry-run");
+        assert!(!effective.live);
+        assert!(effective.dry_run);
+        assert!(effective.input_monitor);
+        assert!(effective.lock_screen);
+        assert!(effective.turn_off_screen == dry_run.turn_off_screen);
     }
 
     #[test]

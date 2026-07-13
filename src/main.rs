@@ -125,6 +125,7 @@ fn diagnose(system_path: &std::path::Path) -> Result<()> {
     let config = Config::load_for_agent(system_path)?;
     let user_path = Config::user_path();
     let screen_off_reason = screensaver::automatic_screen_off_block_reason();
+    let effective_policy = agent::effective_policy(&config.policy, screen_off_reason.is_none());
     let sensor = match iio::SensorPaths::discover(&config.sensor) {
         Ok(sensor) => serde_json::json!({
             "available": true,
@@ -159,6 +160,7 @@ fn diagnose(system_path: &std::path::Path) -> Result<()> {
         "screen_off_block_reason": screen_off_reason,
         "sensor": sensor,
         "policy": config.policy,
+        "effective_policy": effective_policy,
         "warnings": warnings,
     });
     println!("{}", serde_json::to_string_pretty(&output)?);
