@@ -45,8 +45,11 @@ Policy saves use an atomic same-directory replacement. The policy directory is
 kept at mode `0700` and the file at `0600`, preventing other local users from
 reading or replacing desktop automation settings.
 
-When HPD locks the screen, the agent records ownership in the per-login runtime
-directory. A restarted agent can therefore preserve the default return-to-wake
+When HPD locks the screen, the agent records ownership in a private
+`$XDG_RUNTIME_DIR/thinkpad-hpd` directory. The systemd user unit provisions
+that writable runtime directory even under its read-only filesystem sandbox,
+while the backend creates it itself when launched without systemd. A restarted
+agent can therefore preserve the default return-to-wake
 behavior without treating unrelated manual locks as HPD locks. The marker is
 written before the lock request and rolled back if that request fails, closing
 the crash window between locking and recording ownership. It is removed after

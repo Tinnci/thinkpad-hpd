@@ -12,6 +12,9 @@ Restart=on-failure
 RestartSec=3
 Environment=XDG_RUNTIME_DIR=%t
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+RuntimeDirectory=thinkpad-hpd
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
 NoNewPrivileges=true
 CapabilityBoundingSet=
 PrivateNetwork=true

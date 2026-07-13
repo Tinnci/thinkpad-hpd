@@ -1,6 +1,7 @@
 use std::{
     fs,
-    path::PathBuf,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -13,7 +14,8 @@ use zbus::Connection;
 
 use crate::{activity, config::Config, screensaver::ScreenController, service::HumanPresenceProxy};
 
-const LOCK_MARKER_NAME: &str = "thinkpad-hpd-locked-by-agent";
+const RUNTIME_DIRECTORY_NAME: &str = "thinkpad-hpd";
+const LOCK_MARKER_NAME: &str = "locked-by-agent";
 
 struct LockMarker {
     path: PathBuf,
@@ -24,8 +26,25 @@ impl LockMarker {
         let runtime = std::env::var_os("XDG_RUNTIME_DIR")
             .filter(|value| !value.is_empty())
             .context("XDG_RUNTIME_DIR is not set")?;
+        Self::in_runtime_directory(&PathBuf::from(runtime))
+    }
+
+    fn in_runtime_directory(runtime: &Path) -> Result<Self> {
+        let directory = runtime.join(RUNTIME_DIRECTORY_NAME);
+        fs::create_dir_all(&directory).with_context(|| {
+            format!(
+                "failed to create lock marker directory {}",
+                directory.display()
+            )
+        })?;
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).with_context(|| {
+            format!(
+                "failed to secure lock marker directory {}",
+                directory.display()
+            )
+        })?;
         Ok(Self {
-            path: PathBuf::from(runtime).join(LOCK_MARKER_NAME),
+            path: directory.join(LOCK_MARKER_NAME),
         })
     }
 
@@ -431,13 +450,13 @@ async fn connect_presence_proxy(connection: &Connection) -> Result<HumanPresence
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
 
     use crate::config::PolicyConfig;
 
     use super::{
-        LockMarker, effective_policy, presence_deadlines, should_lock, should_monitor_input,
-        should_show_osd, should_wake,
+        LOCK_MARKER_NAME, LockMarker, RUNTIME_DIRECTORY_NAME, effective_policy, presence_deadlines,
+        should_lock, should_monitor_input, should_show_osd, should_wake,
     };
 
     #[test]
@@ -684,5 +703,33 @@ mod tests {
         marker.clear().unwrap();
         marker.clear().unwrap();
         assert!(!marker.is_marked());
+    }
+
+    #[test]
+    fn lock_marker_uses_a_private_runtime_directory() {
+        let runtime = tempfile::tempdir().unwrap();
+        let marker = LockMarker::in_runtime_directory(runtime.path()).unwrap();
+        let directory = runtime.path().join(RUNTIME_DIRECTORY_NAME);
+
+        assert_eq!(marker.path, directory.join(LOCK_MARKER_NAME));
+        assert_eq!(
+            std::fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn systemd_unit_provisions_the_agent_runtime_directory() {
+        let unit = include_str!("../packaging/thinkpad-hpd-agent.service");
+
+        assert!(
+            unit.lines()
+                .any(|line| line == "RuntimeDirectory=thinkpad-hpd")
+        );
+        assert!(unit.lines().any(|line| line == "RuntimeDirectoryMode=0700"));
+        assert!(
+            unit.lines()
+                .any(|line| line == "RuntimeDirectoryPreserve=yes")
+        );
     }
 }
