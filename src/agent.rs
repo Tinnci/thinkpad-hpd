@@ -1,4 +1,8 @@
-use std::time::{Duration, Instant};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
@@ -8,6 +12,46 @@ use tracing::{debug, info, warn};
 use zbus::Connection;
 
 use crate::{activity, config::Config, screensaver::ScreenController, service::HumanPresenceProxy};
+
+const LOCK_MARKER_NAME: &str = "thinkpad-hpd-locked-by-agent";
+
+struct LockMarker {
+    path: PathBuf,
+}
+
+impl LockMarker {
+    fn for_current_session() -> Result<Self> {
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .filter(|value| !value.is_empty())
+            .context("XDG_RUNTIME_DIR is not set")?;
+        Ok(Self {
+            path: PathBuf::from(runtime).join(LOCK_MARKER_NAME),
+        })
+    }
+
+    #[cfg(test)]
+    fn at(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
+    fn is_marked(&self) -> bool {
+        self.path.is_file()
+    }
+
+    fn mark(&self) -> Result<()> {
+        fs::write(&self.path, b"locked\n")
+            .with_context(|| format!("failed to write lock marker {}", self.path.display()))
+    }
+
+    fn clear(&self) -> Result<()> {
+        match fs::remove_file(&self.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error)
+                .with_context(|| format!("failed to remove lock marker {}", self.path.display())),
+        }
+    }
+}
 
 pub async fn run_agent(config: Config) -> Result<()> {
     let system = Connection::system()
@@ -21,6 +65,12 @@ pub async fn run_agent(config: Config) -> Result<()> {
     );
 
     let controller = ScreenController::connect().await?;
+    let lock_marker = LockMarker::for_current_session()?;
+    let initially_locked = controller.is_locked().await.unwrap_or(false);
+    let mut locked_by_hpd = initially_locked && lock_marker.is_marked();
+    if !initially_locked {
+        lock_marker.clear()?;
+    }
     let (activity_tx, activity_rx) = watch::channel(Instant::now());
     let _activity_task = config
         .policy
@@ -35,7 +85,6 @@ pub async fn run_agent(config: Config) -> Result<()> {
     let mut present_since = present.then(Instant::now);
     let mut lock_requested = false;
     let mut wake_requested = false;
-    let mut locked_by_hpd = false;
     let mut osd_announced_present = present;
     let mut last_osd_at: Option<Instant> = None;
     let started_at = Instant::now();
@@ -141,6 +190,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
                                 info!("dry-run: would request screen lock");
                             } else {
                                 controller.lock().await?;
+                                lock_marker.mark()?;
                             }
                             lock_requested = true;
                             locked_by_hpd = true;
@@ -164,10 +214,12 @@ pub async fn run_agent(config: Config) -> Result<()> {
                             info!("dry-run: would simulate user activity");
                         } else {
                             controller.wake().await?;
+                            lock_marker.clear()?;
                         }
                         wake_requested = true;
                         locked_by_hpd = false;
                     } else if !controller.is_locked().await.unwrap_or(false) {
+                        lock_marker.clear()?;
                         locked_by_hpd = false;
                     }
                 }
@@ -304,7 +356,7 @@ mod tests {
 
     use crate::config::PolicyConfig;
 
-    use super::{should_lock, should_show_osd, should_wake};
+    use super::{LockMarker, should_lock, should_show_osd, should_wake};
 
     #[test]
     fn lock_requires_both_presence_and_input_deadlines() {
@@ -463,5 +515,20 @@ mod tests {
         assert!(returned.wake);
         assert!(!returned.lock);
         assert!(!returned.request_screen_off);
+    }
+
+    #[test]
+    fn lock_marker_survives_restart_and_clears_idempotently() {
+        let directory = tempfile::tempdir().unwrap();
+        let marker = LockMarker::at(directory.path().join("locked-by-agent"));
+        assert!(!marker.is_marked());
+
+        marker.mark().unwrap();
+        assert!(marker.is_marked());
+        assert_eq!(std::fs::read_to_string(&marker.path).unwrap(), "locked\n");
+
+        marker.clear().unwrap();
+        marker.clear().unwrap();
+        assert!(!marker.is_marked());
     }
 }
