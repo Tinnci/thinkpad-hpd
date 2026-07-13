@@ -23,6 +23,7 @@ thinkpad-hpd monitor
 thinkpad-hpd daemon
 thinkpad-hpd agent
 thinkpad-hpd settings get
+thinkpad-hpd settings defaults
 thinkpad-hpd diagnose
 thinkpad-hpd simulate --present true --screen-locked true --locked-by-hpd false
 ```
@@ -121,6 +122,8 @@ Settings.
 The KCM also presents the backend's effective mode summary, so combinations
 such as wake-only, lock-and-wake, dry-run and disabled are visible without
 manually interpreting every checkbox.
+The Defaults button reads `settings defaults` from the Rust backend, keeping
+the KCM and non-KDE frontends on the same canonical policy defaults.
 
 See [docs/analysis.md](docs/analysis.md) for the hardware protocol, kernel and
 `iio-sensor-proxy` compatibility analysis.

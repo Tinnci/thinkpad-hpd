@@ -94,6 +94,9 @@ msgstr "传感器服务：%1；桌面代理：%2"
 msgid "Could not read HPD settings: %1"
 msgstr "无法读取 HPD 设置：%1"
 
+msgid "Could not read HPD defaults: %1"
+msgstr "无法读取 HPD 默认设置：%1"
+
 msgid "Could not run HPD diagnostics: %1"
 msgstr "无法运行 HPD 诊断：%1"
 

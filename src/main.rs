@@ -67,6 +67,7 @@ enum Command {
 #[derive(Debug, Subcommand)]
 enum SettingsCommand {
     Get,
+    Defaults,
     Set {
         #[arg(long)]
         json: String,
@@ -172,6 +173,10 @@ fn settings(system_path: &std::path::Path, command: SettingsCommand) -> Result<(
         SettingsCommand::Get => println!(
             "{}",
             serde_json::to_string(&Config::load_for_agent(system_path)?.policy)?
+        ),
+        SettingsCommand::Defaults => println!(
+            "{}",
+            serde_json::to_string(&config::PolicyConfig::default())?
         ),
         SettingsCommand::Set { json } => {
             let policy: config::PolicyConfig = serde_json::from_str(&json)?;

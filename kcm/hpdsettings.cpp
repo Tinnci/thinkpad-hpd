@@ -54,22 +54,7 @@ public:
             m_operationError = i18n("Could not read HPD settings: %1", parseError.errorString());
         }
         const auto object = document.object();
-        m_enabled = object[QStringLiteral("enabled")].toBool(true);
-        m_dryRun = object[QStringLiteral("dry_run")].toBool(true);
-        m_lockScreen = object[QStringLiteral("lock_screen")].toBool(true);
-        m_away = object[QStringLiteral("away_confirm_seconds")].toInt(15);
-        m_idle = object[QStringLiteral("idle_confirm_seconds")].toInt(15);
-        m_startupGrace = object[QStringLiteral("startup_grace_seconds")].toInt(10);
-        m_present = object[QStringLiteral("present_confirm_milliseconds")].toInt(750);
-        m_osdDelay = object[QStringLiteral("osd_confirm_milliseconds")].toInt(1000);
-        m_turnOff = object[QStringLiteral("turn_off_screen")].toBool(false);
-        m_screenOffDelay = object[QStringLiteral("screen_off_delay_milliseconds")].toInt(750);
-        m_wake = object[QStringLiteral("wake_screen")].toBool(true);
-        m_wakeManualLock = object[QStringLiteral("wake_manual_lock")].toBool(false);
-        m_showOsd = object[QStringLiteral("show_osd")].toBool(true);
-        m_osdCooldown = object[QStringLiteral("osd_cooldown_seconds")].toInt(5);
-        m_presentText = object[QStringLiteral("osd_present_text")].toString(QStringLiteral("HPD: 检测到用户"));
-        m_awayText = object[QStringLiteral("osd_away_text")].toString(QStringLiteral("HPD: 用户已离开"));
+        applyPolicyObject(object);
         QByteArray diagnosticOutput;
         if (!runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("diagnose")}, &diagnosticOutput, &commandError)) {
             m_operationError = i18n("Could not run HPD diagnostics: %1", commandError);
@@ -135,17 +120,50 @@ public:
 
     void defaults() override
     {
-        m_enabled = true; m_dryRun = true; m_lockScreen = true; m_away = 15; m_idle = 15; m_startupGrace = 10;
-        m_present = 750; m_osdDelay = 1000; m_osdCooldown = 5; m_screenOffDelay = 750;
-        m_turnOff = false; m_wake = true; m_wakeManualLock = false; m_showOsd = true;
-        m_presentText = QStringLiteral("HPD: 检测到用户"); m_awayText = QStringLiteral("HPD: 用户已离开");
-        setNeedsSave(true); Q_EMIT settingsChanged();
+        m_operationError.clear();
+        QByteArray output;
+        QString commandError;
+        if (!runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("defaults")}, &output, &commandError)) {
+            m_operationError = i18n("Could not read HPD defaults: %1", commandError);
+            Q_EMIT settingsChanged();
+            return;
+        }
+        QJsonParseError parseError;
+        const auto document = QJsonDocument::fromJson(output, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            m_operationError = i18n("Could not read HPD defaults: %1", parseError.errorString());
+            Q_EMIT settingsChanged();
+            return;
+        }
+        applyPolicyObject(document.object());
+        setNeedsSave(true);
+        Q_EMIT settingsChanged();
     }
 
     Q_INVOKABLE void changed() { setNeedsSave(true); }
 Q_SIGNALS:
     void settingsChanged();
 private:
+    void applyPolicyObject(const QJsonObject &object)
+    {
+        m_enabled = object[QStringLiteral("enabled")].toBool(true);
+        m_dryRun = object[QStringLiteral("dry_run")].toBool(true);
+        m_lockScreen = object[QStringLiteral("lock_screen")].toBool(true);
+        m_away = object[QStringLiteral("away_confirm_seconds")].toInt(15);
+        m_idle = object[QStringLiteral("idle_confirm_seconds")].toInt(15);
+        m_startupGrace = object[QStringLiteral("startup_grace_seconds")].toInt(10);
+        m_present = object[QStringLiteral("present_confirm_milliseconds")].toInt(750);
+        m_osdDelay = object[QStringLiteral("osd_confirm_milliseconds")].toInt(1000);
+        m_turnOff = object[QStringLiteral("turn_off_screen")].toBool(false);
+        m_screenOffDelay = object[QStringLiteral("screen_off_delay_milliseconds")].toInt(750);
+        m_wake = object[QStringLiteral("wake_screen")].toBool(true);
+        m_wakeManualLock = object[QStringLiteral("wake_manual_lock")].toBool(false);
+        m_showOsd = object[QStringLiteral("show_osd")].toBool(true);
+        m_osdCooldown = object[QStringLiteral("osd_cooldown_seconds")].toInt(5);
+        m_presentText = object[QStringLiteral("osd_present_text")].toString();
+        m_awayText = object[QStringLiteral("osd_away_text")].toString();
+    }
+
     static QString localizedMode(const QString &mode)
     {
         if (mode == QStringLiteral("disabled")) {
