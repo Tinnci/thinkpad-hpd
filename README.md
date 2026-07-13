@@ -25,7 +25,7 @@ thinkpad-hpd agent
 thinkpad-hpd settings get
 thinkpad-hpd settings defaults
 thinkpad-hpd diagnose
-thinkpad-hpd simulate --present true --screen-locked true --locked-by-hpd false
+thinkpad-hpd simulate --present true --screen-locked true --locked-by-hpd false --wake-armed true
 ```
 
 The system daemon must run as root because IIO buffer configuration and
@@ -40,6 +40,12 @@ off support are optional enhancements.
 `diagnose` includes an `effective_policy` object that resolves the master
 switch, dry-run state, input monitoring, manual-lock wake opt-in and the
 AMDGPU screen-off safety gate into the actions the agent can actually take.
+It also warns when live manual-lock wake is combined with a return confirmation
+below 500 ms, while preserving the lower range for sensors that have been
+independently verified as stable. Manual-lock wake is re-armed only after a
+configurable confirmed absence, preventing rapid present/away sensor flapping
+from repeatedly waking a manually locked screen. Setting that delay to zero
+explicitly restores immediate re-arming and produces a diagnostic warning.
 
 Policy saves use an atomic same-directory replacement. The policy directory is
 kept at mode `0700` and the file at `0600`, preventing other local users from
@@ -68,6 +74,8 @@ the unit to prevent hardware activation. The user agent is managed separately
 with `systemctl --user`. The KCM master switch enables and starts the user
 agent when automation is enabled, and stops and disables it when automation is
 disabled; the privileged sensor service remains available for diagnostics.
+Applying enabled settings restarts the agent so policy changes take effect
+immediately instead of waiting for the next login.
 Both units use explicit bounded restart windows so short IIO or session-bus
 failures recover automatically without entering an unbounded restart loop.
 The desktop agent opens input devices only when both the master switch and

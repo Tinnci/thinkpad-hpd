@@ -55,6 +55,8 @@ enum Command {
         screen_locked: bool,
         #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
         locked_by_hpd: bool,
+        #[arg(long, default_value_t = false, action = clap::ArgAction::Set)]
+        wake_armed: bool,
         #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
         osd_announced_present: bool,
         #[arg(long)]
@@ -100,6 +102,7 @@ async fn main() -> Result<()> {
             runtime_ms,
             screen_locked,
             locked_by_hpd,
+            wake_armed,
             osd_announced_present,
             since_last_osd_ms,
         } => {
@@ -112,6 +115,7 @@ async fn main() -> Result<()> {
                 std::time::Duration::from_millis(runtime_ms),
                 screen_locked,
                 locked_by_hpd,
+                wake_armed,
                 osd_announced_present,
                 since_last_osd_ms.map(std::time::Duration::from_millis),
             );
@@ -150,6 +154,12 @@ fn diagnose(system_path: &std::path::Path) -> Result<()> {
     }
     if config.policy.wake_manual_lock {
         warnings.push("presence may wake screens that the user locked manually");
+    }
+    if config.policy.manual_wake_misfire_risk() {
+        warnings.push("manual-lock wake confirmation below 500 ms may cause unintended wake-ups");
+    }
+    if config.policy.manual_wake_rearm_disabled() {
+        warnings.push("manual-lock wake has no confirmed-absence re-arm delay");
     }
     let output = serde_json::json!({
         "system_config": system_path,

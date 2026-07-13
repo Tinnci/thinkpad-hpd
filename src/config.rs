@@ -36,6 +36,7 @@ pub struct PolicyConfig {
     pub idle_confirm_seconds: u64,
     pub startup_grace_seconds: u64,
     pub present_confirm_milliseconds: u64,
+    pub wake_rearm_seconds: u64,
     pub osd_confirm_milliseconds: u64,
     pub turn_off_screen: bool,
     pub screen_off_delay_milliseconds: u64,
@@ -69,6 +70,7 @@ impl Default for PolicyConfig {
             idle_confirm_seconds: 15,
             startup_grace_seconds: 10,
             present_confirm_milliseconds: 750,
+            wake_rearm_seconds: 5,
             osd_confirm_milliseconds: 1000,
             turn_off_screen: false,
             screen_off_delay_milliseconds: 750,
@@ -160,6 +162,8 @@ struct UserConfig {
 }
 
 impl PolicyConfig {
+    const LOW_MANUAL_WAKE_CONFIRM_MILLISECONDS: u64 = 500;
+
     pub fn validate(&self) -> Result<()> {
         anyhow::ensure!(
             (1..=3600).contains(&self.away_confirm_seconds),
@@ -176,6 +180,10 @@ impl PolicyConfig {
         anyhow::ensure!(
             (100..=60_000).contains(&self.present_confirm_milliseconds),
             "presence confirmation must be between 100 and 60000 milliseconds"
+        );
+        anyhow::ensure!(
+            self.wake_rearm_seconds <= 3600,
+            "wake re-arm absence must be between 0 and 3600 seconds"
         );
         anyhow::ensure!(
             (100..=60_000).contains(&self.osd_confirm_milliseconds),
@@ -217,12 +225,32 @@ impl PolicyConfig {
         Duration::from_millis(self.present_confirm_milliseconds)
     }
 
+    pub fn wake_rearm(&self) -> Duration {
+        Duration::from_secs(self.wake_rearm_seconds)
+    }
+
     pub fn osd_confirm(&self) -> Duration {
         Duration::from_millis(self.osd_confirm_milliseconds)
     }
 
     pub fn osd_cooldown(&self) -> Duration {
         Duration::from_secs(self.osd_cooldown_seconds)
+    }
+
+    pub fn manual_wake_misfire_risk(&self) -> bool {
+        self.enabled
+            && !self.dry_run
+            && self.wake_screen
+            && self.wake_manual_lock
+            && self.present_confirm_milliseconds < Self::LOW_MANUAL_WAKE_CONFIRM_MILLISECONDS
+    }
+
+    pub fn manual_wake_rearm_disabled(&self) -> bool {
+        self.enabled
+            && !self.dry_run
+            && self.wake_screen
+            && self.wake_manual_lock
+            && self.wake_rearm_seconds == 0
     }
 }
 
@@ -340,6 +368,49 @@ away_values = [1]
         assert_eq!(
             invalid.validate().unwrap_err().to_string(),
             "OSD text must not exceed 120 characters"
+        );
+    }
+
+    #[test]
+    fn manual_wake_misfire_risk_only_applies_to_sensitive_live_policies() {
+        let mut policy = PolicyConfig {
+            enabled: true,
+            dry_run: false,
+            wake_screen: true,
+            wake_manual_lock: true,
+            present_confirm_milliseconds: 499,
+            ..PolicyConfig::default()
+        };
+        assert!(policy.manual_wake_misfire_risk());
+
+        policy.present_confirm_milliseconds = 500;
+        assert!(!policy.manual_wake_misfire_risk());
+        policy.present_confirm_milliseconds = 100;
+        policy.dry_run = true;
+        assert!(!policy.manual_wake_misfire_risk());
+        policy.dry_run = false;
+        policy.wake_manual_lock = false;
+        assert!(!policy.manual_wake_misfire_risk());
+
+        policy.wake_manual_lock = true;
+        policy.wake_rearm_seconds = 0;
+        assert!(policy.manual_wake_rearm_disabled());
+        policy.wake_rearm_seconds = 5;
+        assert!(!policy.manual_wake_rearm_disabled());
+    }
+
+    #[test]
+    fn wake_rearm_defaults_safely_and_has_a_bounded_range() {
+        let policy: PolicyConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(policy.wake_rearm_seconds, 5);
+
+        let invalid = PolicyConfig {
+            wake_rearm_seconds: 3601,
+            ..PolicyConfig::default()
+        };
+        assert_eq!(
+            invalid.validate().unwrap_err().to_string(),
+            "wake re-arm absence must be between 0 and 3600 seconds"
         );
     }
 

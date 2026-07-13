@@ -16,6 +16,7 @@ class HpdSettings final : public KQuickConfigModule
     Q_PROPERTY(int idleSeconds MEMBER m_idle NOTIFY settingsChanged)
     Q_PROPERTY(int startupGraceSeconds MEMBER m_startupGrace NOTIFY settingsChanged)
     Q_PROPERTY(int presentMilliseconds MEMBER m_present NOTIFY settingsChanged)
+    Q_PROPERTY(int wakeRearmSeconds MEMBER m_wakeRearm NOTIFY settingsChanged)
     Q_PROPERTY(int osdMilliseconds MEMBER m_osdDelay NOTIFY settingsChanged)
     Q_PROPERTY(bool turnOffScreen MEMBER m_turnOff NOTIFY settingsChanged)
     Q_PROPERTY(int screenOffDelayMilliseconds MEMBER m_screenOffDelay NOTIFY settingsChanged)
@@ -89,7 +90,8 @@ public:
             {QStringLiteral("lock_screen"), m_lockScreen},
             {QStringLiteral("away_confirm_seconds"), m_away}, {QStringLiteral("idle_confirm_seconds"), m_idle},
             {QStringLiteral("startup_grace_seconds"), m_startupGrace},
-            {QStringLiteral("present_confirm_milliseconds"), m_present}, {QStringLiteral("osd_confirm_milliseconds"), m_osdDelay},
+            {QStringLiteral("present_confirm_milliseconds"), m_present}, {QStringLiteral("wake_rearm_seconds"), m_wakeRearm},
+            {QStringLiteral("osd_confirm_milliseconds"), m_osdDelay},
             {QStringLiteral("turn_off_screen"), m_turnOff}, {QStringLiteral("screen_off_delay_milliseconds"), m_screenOffDelay},
             {QStringLiteral("wake_screen"), m_wake}, {QStringLiteral("wake_manual_lock"), m_wakeManualLock},
             {QStringLiteral("show_osd"), m_showOsd}, {QStringLiteral("osd_cooldown_seconds"), m_osdCooldown},
@@ -98,10 +100,17 @@ public:
         QString commandError;
         if (runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("set"),
             QStringLiteral("--json"), QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact))}, nullptr, &commandError)) {
-            const QStringList serviceArguments = m_enabled
-                ? QStringList{QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")}
-                : QStringList{QStringLiteral("--user"), QStringLiteral("disable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")};
-            if (runCommand(QStringLiteral("systemctl"), serviceArguments, nullptr, &commandError)) {
+            const bool serviceUpdated = m_enabled
+                ? runCommand(QStringLiteral("systemctl"),
+                      {QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("thinkpad-hpd-agent.service")},
+                      nullptr, &commandError)
+                    && runCommand(QStringLiteral("systemctl"),
+                        {QStringLiteral("--user"), QStringLiteral("restart"), QStringLiteral("thinkpad-hpd-agent.service")},
+                        nullptr, &commandError)
+                : runCommand(QStringLiteral("systemctl"),
+                      {QStringLiteral("--user"), QStringLiteral("disable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")},
+                      nullptr, &commandError);
+            if (serviceUpdated) {
                 setNeedsSave(false);
                 load();
             } else {
@@ -153,6 +162,7 @@ private:
         m_idle = object[QStringLiteral("idle_confirm_seconds")].toInt(15);
         m_startupGrace = object[QStringLiteral("startup_grace_seconds")].toInt(10);
         m_present = object[QStringLiteral("present_confirm_milliseconds")].toInt(750);
+        m_wakeRearm = object[QStringLiteral("wake_rearm_seconds")].toInt(5);
         m_osdDelay = object[QStringLiteral("osd_confirm_milliseconds")].toInt(1000);
         m_turnOff = object[QStringLiteral("turn_off_screen")].toBool(false);
         m_screenOffDelay = object[QStringLiteral("screen_off_delay_milliseconds")].toInt(750);
@@ -226,7 +236,7 @@ private:
         return succeeded;
     }
 
-    int m_away = 15, m_idle = 15, m_startupGrace = 10, m_present = 750, m_osdDelay = 1000, m_osdCooldown = 5, m_screenOffDelay = 750;
+    int m_away = 15, m_idle = 15, m_startupGrace = 10, m_present = 750, m_wakeRearm = 5, m_osdDelay = 1000, m_osdCooldown = 5, m_screenOffDelay = 750;
     bool m_enabled = true, m_dryRun = true, m_lockScreen = true, m_turnOff = false, m_wake = true, m_wakeManualLock = false, m_showOsd = true;
     QString m_presentText, m_awayText;
     bool m_screenOffSupported = false;

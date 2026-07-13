@@ -58,8 +58,17 @@ msgstr "检测到用户返回时唤醒锁屏界面"
 msgid "Also wake screens locked manually"
 msgstr "同时唤醒手动锁定的屏幕"
 
+msgid "Wake re-arm absence (seconds):"
+msgstr "唤醒重新布防的离开时间（秒）："
+
 msgid "Return confirmation (ms):"
 msgstr "返回确认时间（毫秒）："
+
+msgid "Without an absence re-arm delay, sensor flapping can repeatedly arm manual-lock wake."
+msgstr "未设置离开重新布防时间时，传感器抖动可能反复启用手动锁屏唤醒。"
+
+msgid "Short return confirmation can wake a manually locked screen on brief sensor transitions."
+msgstr "返回确认时间过短时，传感器的短暂波动可能会唤醒手动锁定的屏幕。"
 
 msgid "On-screen status"
 msgstr "屏幕状态提示"

@@ -27,7 +27,20 @@ KCM.SimpleKCM {
         Kirigami.Heading { Kirigami.FormData.isSection: true; level: 3; text: i18n("Return behavior") }
         QQC2.CheckBox { text: i18n("Wake lock screen when presence returns"); enabled: kcm.enabled; checked: kcm.wakeScreen; onToggled: { kcm.wakeScreen = checked; kcm.changed() } }
         QQC2.CheckBox { text: i18n("Also wake screens locked manually"); enabled: kcm.enabled && kcm.wakeScreen; checked: kcm.wakeManualLock; onToggled: { kcm.wakeManualLock = checked; kcm.changed() } }
+        QQC2.SpinBox { Kirigami.FormData.label: i18n("Wake re-arm absence (seconds):"); enabled: kcm.enabled && kcm.wakeScreen; from: 0; to: 3600; value: kcm.wakeRearmSeconds; onValueModified: { kcm.wakeRearmSeconds = value; kcm.changed() } }
         QQC2.SpinBox { Kirigami.FormData.label: i18n("Return confirmation (ms):"); enabled: kcm.enabled && kcm.wakeScreen; from: 100; to: 60000; stepSize: 50; value: kcm.presentMilliseconds; onValueModified: { kcm.presentMilliseconds = value; kcm.changed() } }
+        Kirigami.InlineMessage {
+            Kirigami.FormData.isSection: true
+            visible: kcm.enabled && !kcm.dryRun && kcm.wakeScreen && kcm.wakeManualLock && kcm.wakeRearmSeconds === 0
+            type: Kirigami.MessageType.Warning
+            text: i18n("Without an absence re-arm delay, sensor flapping can repeatedly arm manual-lock wake.")
+        }
+        Kirigami.InlineMessage {
+            Kirigami.FormData.isSection: true
+            visible: kcm.enabled && !kcm.dryRun && kcm.wakeScreen && kcm.wakeManualLock && kcm.presentMilliseconds < 500
+            type: Kirigami.MessageType.Warning
+            text: i18n("Short return confirmation can wake a manually locked screen on brief sensor transitions.")
+        }
 
         Kirigami.Separator { Kirigami.FormData.isSection: true }
         Kirigami.Heading { Kirigami.FormData.isSection: true; level: 3; text: i18n("On-screen status") }

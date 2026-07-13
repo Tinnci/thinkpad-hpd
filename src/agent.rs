@@ -105,6 +105,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
         presence_deadlines(sensor_available, present, Instant::now());
     let mut lock_requested = false;
     let mut wake_requested = false;
+    let mut wake_armed = false;
     let mut osd_announced_present = present;
     let mut last_osd_at: Option<Instant> = None;
     let started_at = Instant::now();
@@ -120,6 +121,8 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     sensor_available = false;
                     away_since = None;
                     present_since = None;
+                    wake_requested = false;
+                    wake_armed = false;
                     warn!("presence sensor became unavailable");
                     continue;
                 }
@@ -131,6 +134,9 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     (away_since, present_since) =
                         presence_deadlines(true, present, Instant::now());
                     wake_requested = false;
+                    if !present {
+                        wake_armed = false;
+                    }
                 }
             }
             owner = owner_changes.next() => {
@@ -143,6 +149,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     present_since = None;
                     lock_requested = false;
                     wake_requested = false;
+                    wake_armed = false;
                     warn!("presence daemon disconnected; policy paused");
                     continue;
                 }
@@ -155,6 +162,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
                             presence_deadlines(available, present, Instant::now());
                         lock_requested = false;
                         wake_requested = false;
+                        wake_armed = false;
                         info!(available, present, raw, "presence daemon reconnected");
                     }
                     Err(error) => {
@@ -197,6 +205,10 @@ pub async fn run_agent(config: Config) -> Result<()> {
                 }
                 if !present {
                     let away_for = away_since.map(|start| now.saturating_duration_since(start)).unwrap_or_default();
+                    if should_arm_wake(wake_armed, away_for, &config.policy) {
+                        wake_armed = true;
+                        debug!(?away_for, "return wake armed after confirmed absence");
+                    }
                     let idle_for = now.saturating_duration_since(last_activity);
                     let running_for = now.saturating_duration_since(started_at);
                     if should_lock(lock_requested, away_for, idle_for, running_for, &config.policy) {
@@ -240,7 +252,13 @@ pub async fn run_agent(config: Config) -> Result<()> {
                             continue;
                         }
                     };
-                    if should_wake(wake_requested, locked_by_hpd, present_for, &config.policy)
+                    if should_wake(
+                        wake_requested,
+                        wake_armed,
+                        locked_by_hpd,
+                        present_for,
+                        &config.policy,
+                    )
                         && screen_locked {
                         if config.policy.dry_run {
                             info!("dry-run: would simulate user activity");
@@ -249,11 +267,13 @@ pub async fn run_agent(config: Config) -> Result<()> {
                             lock_marker.clear()?;
                         }
                         wake_requested = true;
+                        wake_armed = false;
                         locked_by_hpd = false;
                     } else if !screen_locked {
                         lock_marker.clear()?;
                         locked_by_hpd = false;
                         wake_requested = true;
+                        wake_armed = false;
                     }
                 }
             }
@@ -300,6 +320,14 @@ fn should_lock(
 
 fn should_monitor_input(policy: &crate::config::PolicyConfig) -> bool {
     policy.enabled && policy.lock_screen
+}
+
+fn should_arm_wake(
+    wake_armed: bool,
+    away_for: Duration,
+    policy: &crate::config::PolicyConfig,
+) -> bool {
+    policy.enabled && policy.wake_screen && !wake_armed && away_for >= policy.wake_rearm()
 }
 
 #[derive(Debug, Serialize)]
@@ -365,6 +393,7 @@ fn presence_deadlines(
 
 fn should_wake(
     wake_requested: bool,
+    wake_armed: bool,
     locked_by_hpd: bool,
     present_for: Duration,
     policy: &crate::config::PolicyConfig,
@@ -372,7 +401,7 @@ fn should_wake(
     policy.enabled
         && !wake_requested
         && policy.wake_screen
-        && (locked_by_hpd || policy.wake_manual_lock)
+        && (locked_by_hpd || (policy.wake_manual_lock && wake_armed))
         && present_for >= policy.present_confirm()
 }
 
@@ -409,11 +438,14 @@ pub fn simulate_policy(
     running_for: Duration,
     screen_locked: bool,
     locked_by_hpd: bool,
+    wake_armed: bool,
     osd_announced_present: bool,
     since_last_osd: Option<Duration>,
 ) -> SimulationDecision {
     let lock = !present && should_lock(false, stable_for, idle_for, running_for, policy);
-    let wake = present && screen_locked && should_wake(false, locked_by_hpd, stable_for, policy);
+    let wake = present
+        && screen_locked
+        && should_wake(false, wake_armed, locked_by_hpd, stable_for, policy);
     let show_osd = should_show_osd(
         policy.enabled && policy.show_osd,
         osd_announced_present,
@@ -456,7 +488,7 @@ mod tests {
 
     use super::{
         LOCK_MARKER_NAME, LockMarker, RUNTIME_DIRECTORY_NAME, effective_policy, presence_deadlines,
-        should_lock, should_monitor_input, should_show_osd, should_wake,
+        should_arm_wake, should_lock, should_monitor_input, should_show_osd, should_wake,
     };
 
     #[test]
@@ -584,21 +616,65 @@ mod tests {
         let mut policy = PolicyConfig::default();
         assert!(!should_wake(
             false,
+            false,
             true,
             Duration::from_millis(749),
             &policy
         ));
         assert!(should_wake(
             false,
+            false,
             true,
             Duration::from_millis(750),
             &policy
         ));
-        assert!(!should_wake(false, false, Duration::from_secs(5), &policy));
+        assert!(!should_wake(
+            false,
+            true,
+            false,
+            Duration::from_secs(5),
+            &policy
+        ));
         policy.wake_manual_lock = true;
-        assert!(should_wake(false, false, Duration::from_secs(5), &policy));
+        assert!(!should_wake(
+            false,
+            false,
+            false,
+            Duration::from_secs(5),
+            &policy
+        ));
+        assert!(should_wake(
+            false,
+            true,
+            false,
+            Duration::from_secs(5),
+            &policy
+        ));
         policy.wake_screen = false;
-        assert!(!should_wake(false, true, Duration::from_secs(5), &policy));
+        assert!(!should_wake(
+            false,
+            true,
+            true,
+            Duration::from_secs(5),
+            &policy
+        ));
+    }
+
+    #[test]
+    fn manual_wake_arms_only_after_a_stable_absence() {
+        let policy = PolicyConfig {
+            enabled: true,
+            wake_screen: true,
+            wake_rearm_seconds: 5,
+            ..PolicyConfig::default()
+        };
+        assert!(!should_arm_wake(
+            false,
+            Duration::from_millis(4_999),
+            &policy
+        ));
+        assert!(should_arm_wake(false, Duration::from_secs(5), &policy));
+        assert!(!should_arm_wake(true, Duration::from_secs(30), &policy));
     }
 
     #[test]
@@ -666,6 +742,7 @@ mod tests {
             Duration::from_secs(60),
             false,
             false,
+            false,
             true,
             None,
         );
@@ -682,6 +759,7 @@ mod tests {
             Duration::from_secs(60),
             true,
             false,
+            true,
             false,
             None,
         );
