@@ -10,14 +10,14 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub sensor: SensorConfig,
     pub policy: PolicyConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct SensorConfig {
     pub sysfs_name: String,
     pub platform_match: String,
@@ -27,7 +27,7 @@ pub struct SensorConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct PolicyConfig {
     pub enabled: bool,
     pub dry_run: bool,
@@ -154,6 +154,7 @@ impl Config {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct UserConfig {
     policy: PolicyConfig,
 }
@@ -376,5 +377,29 @@ away_values = [1]
             fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600
         );
+    }
+
+    #[test]
+    fn policy_json_rejects_unknown_fields() {
+        let error = serde_json::from_str::<PolicyConfig>(r#"{"enable":false}"#).unwrap_err();
+        assert!(error.to_string().contains("unknown field `enable`"));
+    }
+
+    #[test]
+    fn system_toml_rejects_unknown_fields() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            r#"
+[sensor]
+buffer_lenght = 16
+"#,
+        )
+        .unwrap();
+        let error = Config::load(&path).unwrap_err();
+        assert!(error.to_string().contains("failed to parse"));
+        let source = error.source().unwrap().to_string();
+        assert!(source.contains("unknown field `buffer_lenght`"));
     }
 }

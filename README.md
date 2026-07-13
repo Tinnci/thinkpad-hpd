@@ -76,6 +76,8 @@ both value mappings must be non-empty, present and away values must not
 overlap, and `buffer_length` must be between 2 and 4096 samples.
 OSD messages are limited to 120 Unicode characters, matching the KCM text
 fields for both ASCII and translated text.
+Unknown JSON and TOML fields are rejected while omitted fields still receive
+defaults, preventing misspelled options from being silently ignored.
 
 Automatic display power-off defaults to disabled. It is forcibly blocked on
 AMDGPU Wayland systems where DMCUB/pageflip failures have been observed.
