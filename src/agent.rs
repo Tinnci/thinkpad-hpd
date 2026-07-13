@@ -81,8 +81,8 @@ pub async fn run_agent(config: Config) -> Result<()> {
     let mut tick = time::interval(Duration::from_millis(250));
     tick.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
-    let mut away_since = (!present).then(Instant::now);
-    let mut present_since = present.then(Instant::now);
+    let (mut away_since, mut present_since) =
+        presence_deadlines(sensor_available, present, Instant::now());
     let mut lock_requested = false;
     let mut wake_requested = false;
     let mut osd_announced_present = present;
@@ -103,19 +103,14 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     warn!("presence sensor became unavailable");
                     continue;
                 }
+                let availability_changed = !sensor_available;
                 sensor_available = true;
-                if args.present != present {
+                if availability_changed || args.present != present {
                     present = args.present;
                     info!(present, raw = args.raw, "agent received presence transition");
-                    if present {
-                        present_since = Some(Instant::now());
-                        away_since = None;
-                        wake_requested = false;
-                    } else {
-                        away_since = Some(Instant::now());
-                        present_since = None;
-                        wake_requested = false;
-                    }
+                    (away_since, present_since) =
+                        presence_deadlines(true, present, Instant::now());
+                    wake_requested = false;
                 }
             }
             owner = owner_changes.next() => {
@@ -136,8 +131,8 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     Ok((available, new_present, raw)) => {
                         sensor_available = available;
                         present = new_present;
-                        away_since = (available && !present).then(Instant::now);
-                        present_since = (available && present).then(Instant::now);
+                        (away_since, present_since) =
+                            presence_deadlines(available, present, Instant::now());
                         lock_requested = false;
                         wake_requested = false;
                         info!(available, present, raw, "presence daemon reconnected");
@@ -265,6 +260,20 @@ fn should_lock(
         && idle_for >= policy.idle_confirm()
 }
 
+fn presence_deadlines(
+    available: bool,
+    present: bool,
+    now: Instant,
+) -> (Option<Instant>, Option<Instant>) {
+    if !available {
+        (None, None)
+    } else if present {
+        (None, Some(now))
+    } else {
+        (Some(now), None)
+    }
+}
+
 fn should_wake(
     wake_requested: bool,
     locked_by_hpd: bool,
@@ -356,7 +365,7 @@ mod tests {
 
     use crate::config::PolicyConfig;
 
-    use super::{LockMarker, should_lock, should_show_osd, should_wake};
+    use super::{LockMarker, presence_deadlines, should_lock, should_show_osd, should_wake};
 
     #[test]
     fn lock_requires_both_presence_and_input_deadlines() {
@@ -404,6 +413,15 @@ mod tests {
             Duration::from_secs(30),
             &policy
         ));
+    }
+
+    #[test]
+    fn unavailable_sensor_never_starts_presence_deadlines() {
+        let now = std::time::Instant::now();
+        assert_eq!(presence_deadlines(false, false, now), (None, None));
+        assert_eq!(presence_deadlines(false, true, now), (None, None));
+        assert_eq!(presence_deadlines(true, false, now), (Some(now), None));
+        assert_eq!(presence_deadlines(true, true, now), (None, Some(now)));
     }
 
     #[test]

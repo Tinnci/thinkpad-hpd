@@ -51,7 +51,9 @@ disabled; the privileged sensor service remains available for diagnostics.
 Sensor values not listed in `present_values` or `away_values` are treated as
 unmapped. They are logged for diagnostics but never published as a presence
 transition; if the initial sample is unmapped, automation remains paused until
-the first classified sample arrives.
+the first classified sample arrives. Away and return confirmation timers begin
+only when the sensor becomes available, so an unknown or disconnected interval
+is never counted toward an automation action.
 
 System configuration is validated before sensor discovery. Sensor names and
 both value mappings must be non-empty, present and away values must not
