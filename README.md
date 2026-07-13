@@ -53,6 +53,8 @@ the unit to prevent hardware activation. The user agent is managed separately
 with `systemctl --user`. The KCM master switch enables and starts the user
 agent when automation is enabled, and stops and disables it when automation is
 disabled; the privileged sensor service remains available for diagnostics.
+Both units use explicit bounded restart windows so short IIO or session-bus
+failures recover automatically without entering an unbounded restart loop.
 
 Sensor values not listed in `present_values` or `away_values` are treated as
 unmapped. They are logged for diagnostics but never published as a presence

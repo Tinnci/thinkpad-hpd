@@ -1,13 +1,15 @@
 [Unit]
 Description=ThinkPad HID Human Presence Daemon
 After=dbus.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Service]
 Type=dbus
 BusName=org.thinkpad.HumanPresence1
 ExecStart=/usr/local/bin/thinkpad-hpd daemon
 Restart=on-failure
-RestartSec=2
+RestartSec=5
 User=root
 Group=root
 ProtectSystem=strict

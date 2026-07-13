@@ -33,3 +33,5 @@ jobs:
       - uses: actions/checkout@v5
       - run: cmake -S kcm -B build-kcm -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
       - run: cmake --build build-kcm
+      - run: systemd-analyze verify packaging/thinkpad-hpd.service
+      - run: SYSTEMD_UNIT_PATH="$PWD/packaging:/usr/lib/systemd/user:/usr/lib/systemd/system" systemd-analyze verify packaging/thinkpad-hpd-agent.service
