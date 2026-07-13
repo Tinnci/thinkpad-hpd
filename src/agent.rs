@@ -31,6 +31,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
     let mut present_since = present.then(Instant::now);
     let mut lock_requested = false;
     let mut wake_requested = false;
+    let mut osd_announced_present = present;
 
     loop {
         tokio::select! {
@@ -98,6 +99,26 @@ pub async fn run_agent(config: Config) -> Result<()> {
                 }
                 let now = Instant::now();
                 let last_activity = *activity_rx.borrow();
+                let presence_stable_for = if present {
+                    present_since.map(|start| now.saturating_duration_since(start))
+                } else {
+                    away_since.map(|start| now.saturating_duration_since(start))
+                }.unwrap_or_default();
+                if should_show_osd(
+                    config.policy.show_osd,
+                    osd_announced_present,
+                    present,
+                    presence_stable_for,
+                    &config.policy,
+                ) {
+                    let text = if present {
+                        &config.policy.osd_present_text
+                    } else {
+                        &config.policy.osd_away_text
+                    };
+                    controller.show_presence_osd(present, text).await;
+                    osd_announced_present = present;
+                }
                 if !present {
                     let away_for = away_since.map(|start| now.saturating_duration_since(start)).unwrap_or_default();
                     let idle_for = now.saturating_duration_since(last_activity);
@@ -167,6 +188,16 @@ fn should_wake(
     !wake_requested && policy.wake_screen && present_for >= policy.present_confirm()
 }
 
+fn should_show_osd(
+    enabled: bool,
+    announced_present: bool,
+    present: bool,
+    stable_for: Duration,
+    policy: &crate::config::PolicyConfig,
+) -> bool {
+    enabled && announced_present != present && stable_for >= policy.osd_confirm()
+}
+
 async fn connect_presence_proxy(connection: &Connection) -> Result<HumanPresenceProxy<'_>> {
     let mut delay = Duration::from_millis(250);
     loop {
@@ -188,7 +219,7 @@ mod tests {
 
     use crate::config::PolicyConfig;
 
-    use super::{should_lock, should_wake};
+    use super::{should_lock, should_show_osd, should_wake};
 
     #[test]
     fn lock_requires_both_presence_and_input_deadlines() {
@@ -226,5 +257,38 @@ mod tests {
         assert!(should_wake(false, Duration::from_millis(750), &policy));
         policy.wake_screen = false;
         assert!(!should_wake(false, Duration::from_secs(5), &policy));
+    }
+
+    #[test]
+    fn osd_requires_a_stable_new_state() {
+        let policy = PolicyConfig::default();
+        assert!(!should_show_osd(
+            true,
+            true,
+            false,
+            Duration::from_millis(999),
+            &policy
+        ));
+        assert!(should_show_osd(
+            true,
+            true,
+            false,
+            Duration::from_millis(1000),
+            &policy
+        ));
+        assert!(!should_show_osd(
+            true,
+            true,
+            true,
+            Duration::from_secs(5),
+            &policy
+        ));
+        assert!(!should_show_osd(
+            false,
+            true,
+            false,
+            Duration::from_secs(5),
+            &policy
+        ));
     }
 }

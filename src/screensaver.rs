@@ -6,6 +6,10 @@ const SCREENSAVER_SERVICE: &str = "org.freedesktop.ScreenSaver";
 const SCREENSAVER_PATH: &str = "/ScreenSaver";
 const SCREENSAVER_INTERFACE: &str = "org.freedesktop.ScreenSaver";
 
+const PLASMASHELL_SERVICE: &str = "org.kde.plasmashell";
+const OSD_PATH: &str = "/org/kde/osdService";
+const OSD_INTERFACE: &str = "org.kde.osdService";
+
 const GLOBAL_ACCEL_SERVICE: &str = "org.kde.kglobalaccel";
 const POWERDEVIL_PATH: &str = "/component/org_kde_powerdevil";
 const POWERDEVIL_INTERFACE: &str = "org.kde.kglobalaccel.Component";
@@ -77,6 +81,30 @@ impl ScreenController {
         .await;
         if let Err(error) = result {
             warn!(%error, "failed to invoke the KDE Turn Off Screen shortcut");
+        }
+    }
+
+    pub async fn show_presence_osd(&self, present: bool, text: &str) {
+        info!(present, "displaying KDE presence OSD");
+        let icon = if present {
+            "preferences-desktop-user"
+        } else {
+            "system-lock-screen"
+        };
+        let result = async {
+            let proxy = Proxy::new(
+                &self.connection,
+                PLASMASHELL_SERVICE,
+                OSD_PATH,
+                OSD_INTERFACE,
+            )
+            .await?;
+            let _: () = proxy.call("showText", &(icon, text)).await?;
+            Ok::<(), zbus::Error>(())
+        }
+        .await;
+        if let Err(error) = result {
+            warn!(%error, "failed to display the KDE presence OSD");
         }
     }
 }

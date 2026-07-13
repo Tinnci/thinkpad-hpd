@@ -95,7 +95,8 @@ System D-Bus API:
 The default policy requires both 15 seconds of confirmed absence and 15 seconds
 without actual input before locking. Presence must remain stable for 750 ms
 before waking the lock screen. Wake only simulates activity; it does not unlock
-the session or bypass authentication.
+the session or bypass authentication. Presence transitions are also shown using
+KDE's native `org.kde.osdService` after a separate 1-second debounce.
 
 The IIO reader uses a bounded poll timeout so SIGTERM can stop it cleanly. Its
 RAII cleanup disables both `buffer0/enable` and the scan element before the

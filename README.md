@@ -11,7 +11,8 @@ state over system D-Bus.
 
 The per-user agent monitors real keyboard and pointer activity through evdev,
 locks through KDE's `org.freedesktop.ScreenSaver` interface after a confirmed
-away period, and wakes the lock screen when presence returns.
+away period, wakes the lock screen when presence returns, and displays native
+Plasma OSD messages for stable presence changes.
 
 ## Commands
 

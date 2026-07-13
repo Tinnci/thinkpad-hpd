@@ -26,8 +26,12 @@ pub struct PolicyConfig {
     pub away_confirm_seconds: u64,
     pub idle_confirm_seconds: u64,
     pub present_confirm_milliseconds: u64,
+    pub osd_confirm_milliseconds: u64,
     pub turn_off_screen: bool,
     pub wake_screen: bool,
+    pub show_osd: bool,
+    pub osd_present_text: String,
+    pub osd_away_text: String,
 }
 
 impl Default for SensorConfig {
@@ -48,8 +52,12 @@ impl Default for PolicyConfig {
             away_confirm_seconds: 15,
             idle_confirm_seconds: 15,
             present_confirm_milliseconds: 750,
+            osd_confirm_milliseconds: 1000,
             turn_off_screen: true,
             wake_screen: true,
+            show_osd: true,
+            osd_present_text: "HPD: 检测到用户".to_string(),
+            osd_away_text: "HPD: 用户已离开".to_string(),
         }
     }
 }
@@ -76,6 +84,10 @@ impl PolicyConfig {
 
     pub fn present_confirm(&self) -> Duration {
         Duration::from_millis(self.present_confirm_milliseconds)
+    }
+
+    pub fn osd_confirm(&self) -> Duration {
+        Duration::from_millis(self.osd_confirm_milliseconds)
     }
 }
 
