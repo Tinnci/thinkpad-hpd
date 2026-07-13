@@ -1,0 +1,1 @@
+SUBSYSTEM=="iio", ATTR{name}=="prox", KERNELS=="HID-SENSOR-200011.*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="thinkpad-hpd.service"

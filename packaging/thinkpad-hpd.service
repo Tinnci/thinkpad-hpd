@@ -1,0 +1,40 @@
+[Unit]
+Description=ThinkPad HID Human Presence Daemon
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.thinkpad.HumanPresence1
+ExecStart=/usr/local/bin/thinkpad-hpd daemon
+Restart=on-failure
+RestartSec=2
+User=root
+Group=root
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+DevicePolicy=closed
+DeviceAllow=char-iio r
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+LockPersonality=true
+MemoryDenyWriteExecute=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[sensor]
+sysfs_name = "prox"
+platform_match = "HID-SENSOR-200011"
+present_values = [1]
+away_values = [2]
+buffer_length = 16
+
+[policy]
+away_confirm_seconds = 15
+idle_confirm_seconds = 15
+present_confirm_milliseconds = 750
+turn_off_screen = true
+wake_screen = true
