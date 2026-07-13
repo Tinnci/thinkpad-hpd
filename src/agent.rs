@@ -72,10 +72,8 @@ pub async fn run_agent(config: Config) -> Result<()> {
         lock_marker.clear()?;
     }
     let (activity_tx, activity_rx) = watch::channel(Instant::now());
-    let _activity_task = config
-        .policy
-        .lock_screen
-        .then(|| activity::start_input_monitor(activity_tx));
+    let _activity_task =
+        should_monitor_input(&config.policy).then(|| activity::start_input_monitor(activity_tx));
     let mut presence_signals = proxy.receive_presence_changed().await?;
     let mut owner_changes = proxy.inner().receive_owner_changed().await?;
     let mut tick = time::interval(Duration::from_millis(250));
@@ -263,6 +261,10 @@ fn should_lock(
         && idle_for >= policy.idle_confirm()
 }
 
+fn should_monitor_input(policy: &crate::config::PolicyConfig) -> bool {
+    policy.enabled && policy.lock_screen
+}
+
 fn presence_deadlines(
     available: bool,
     present: bool,
@@ -368,7 +370,10 @@ mod tests {
 
     use crate::config::PolicyConfig;
 
-    use super::{LockMarker, presence_deadlines, should_lock, should_show_osd, should_wake};
+    use super::{
+        LockMarker, presence_deadlines, should_lock, should_monitor_input, should_show_osd,
+        should_wake,
+    };
 
     #[test]
     fn lock_requires_both_presence_and_input_deadlines() {
@@ -416,6 +421,22 @@ mod tests {
             Duration::from_secs(30),
             &policy
         ));
+    }
+
+    #[test]
+    fn input_monitor_only_runs_for_enabled_lock_policy() {
+        let mut policy = PolicyConfig::default();
+        assert!(should_monitor_input(&policy));
+
+        policy.dry_run = false;
+        assert!(should_monitor_input(&policy));
+
+        policy.lock_screen = false;
+        assert!(!should_monitor_input(&policy));
+
+        policy.lock_screen = true;
+        policy.enabled = false;
+        assert!(!should_monitor_input(&policy));
     }
 
     #[test]

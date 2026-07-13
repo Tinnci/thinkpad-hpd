@@ -55,6 +55,9 @@ agent when automation is enabled, and stops and disables it when automation is
 disabled; the privileged sensor service remains available for diagnostics.
 Both units use explicit bounded restart windows so short IIO or session-bus
 failures recover automatically without entering an unbounded restart loop.
+The desktop agent opens input devices only when both the master switch and
+automatic locking are enabled. Disabled and wake-only policies do not start an
+evdev monitor, even if the agent is launched manually.
 
 Sensor values not listed in `present_values` or `away_values` are treated as
 unmapped. They are logged for diagnostics but never published as a presence
