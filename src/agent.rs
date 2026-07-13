@@ -66,7 +66,10 @@ pub async fn run_agent(config: Config) -> Result<()> {
 
     let controller = ScreenController::connect().await?;
     let lock_marker = LockMarker::for_current_session()?;
-    let initially_locked = controller.is_locked().await.unwrap_or(false);
+    let initially_locked = controller
+        .is_locked()
+        .await
+        .context("failed to read initial screen lock state")?;
     let mut locked_by_hpd = initially_locked && lock_marker.is_marked();
     if !initially_locked {
         lock_marker.clear()?;
@@ -178,7 +181,14 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     let idle_for = now.saturating_duration_since(last_activity);
                     let running_for = now.saturating_duration_since(started_at);
                     if should_lock(lock_requested, away_for, idle_for, running_for, &config.policy) {
-                        if !controller.is_locked().await.unwrap_or(false) {
+                        let screen_locked = match controller.is_locked().await {
+                            Ok(locked) => locked,
+                            Err(error) => {
+                                warn!(%error, "screen lock state unavailable; skipping away action");
+                                continue;
+                            }
+                        };
+                        if !screen_locked {
                             if config.policy.dry_run {
                                 info!("dry-run: would request screen lock");
                             } else {
@@ -204,8 +214,15 @@ pub async fn run_agent(config: Config) -> Result<()> {
                     }
                 } else if !wake_requested {
                     let present_for = present_since.map(|start| now.saturating_duration_since(start)).unwrap_or_default();
+                    let screen_locked = match controller.is_locked().await {
+                        Ok(locked) => locked,
+                        Err(error) => {
+                            warn!(%error, "screen lock state unavailable; skipping return action");
+                            continue;
+                        }
+                    };
                     if should_wake(wake_requested, locked_by_hpd, present_for, &config.policy)
-                        && controller.is_locked().await.unwrap_or(false) {
+                        && screen_locked {
                         if config.policy.dry_run {
                             info!("dry-run: would simulate user activity");
                         } else {
@@ -214,7 +231,7 @@ pub async fn run_agent(config: Config) -> Result<()> {
                         }
                         wake_requested = true;
                         locked_by_hpd = false;
-                    } else if !controller.is_locked().await.unwrap_or(false) {
+                    } else if !screen_locked {
                         lock_marker.clear()?;
                         locked_by_hpd = false;
                     }

@@ -51,6 +51,9 @@ behavior without treating unrelated manual locks as HPD locks. The marker is
 written before the lock request and rolled back if that request fails, closing
 the crash window between locking and recording ownership. It is removed after
 wake or whenever the session is observed unlocked.
+Screen lock state queries fail closed: an unavailable ScreenSaver D-Bus state
+never triggers a lock or wake action and never clears lock ownership. Initial
+state failure causes the bounded systemd restart policy to retry the agent.
 
 The IIO udev rule starts the system daemon when compatible hardware appears,
 so the system unit can be active while its install state is `disabled`. Mask
