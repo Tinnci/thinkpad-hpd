@@ -16,11 +16,29 @@ use crate::{
 pub const SERVICE_NAME: &str = "org.thinkpad.HumanPresence1";
 pub const OBJECT_PATH: &str = "/org/thinkpad/HumanPresence1";
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct PresenceState {
     available: bool,
     present: bool,
     raw: i32,
+}
+
+impl PresenceState {
+    fn from_initial(raw: i32, classified: Option<bool>) -> Self {
+        Self {
+            available: classified.is_some(),
+            present: classified.unwrap_or(false),
+            raw,
+        }
+    }
+
+    fn apply_classified(&mut self, raw: i32, present: bool) -> bool {
+        let changed = !self.available || self.raw != raw || self.present != present;
+        self.available = true;
+        self.raw = raw;
+        self.present = present;
+        changed
+    }
 }
 
 #[derive(Clone)]
@@ -80,21 +98,29 @@ pub trait HumanPresence {
 pub async fn run_daemon(config: Config) -> Result<()> {
     let sensor = SensorPaths::discover(&config.sensor)?;
     let initial_raw = sensor.read_current()?;
-    let initial_present = config.sensor.classify(initial_raw).unwrap_or(false);
+    let initial_classified = config.sensor.classify(initial_raw);
+    let initial_present = initial_classified.unwrap_or(false);
+    let initial_available = initial_classified.is_some();
     info!(
         sysfs = %sensor.sysfs_dir.display(),
         device = %sensor.dev_path.display(),
         scan_type = %sensor.scan_type.raw,
         initial_raw,
+        initial_available,
         initial_present,
         "discovered HID human-presence sensor"
     );
 
-    let state = Arc::new(RwLock::new(PresenceState {
-        available: true,
-        present: initial_present,
-        raw: initial_raw,
-    }));
+    if !initial_available {
+        warn!(
+            initial_raw,
+            "initial presence value is unmapped; waiting for a valid sample"
+        );
+    }
+    let state = Arc::new(RwLock::new(PresenceState::from_initial(
+        initial_raw,
+        initial_classified,
+    )));
     let interface = HumanPresence {
         state: Arc::clone(&state),
     };
@@ -110,7 +136,7 @@ pub async fn run_daemon(config: Config) -> Result<()> {
         .await?;
     HumanPresence::presence_changed(
         interface_ref.signal_emitter(),
-        true,
+        initial_available,
         initial_present,
         initial_raw,
     )
@@ -145,7 +171,6 @@ pub async fn run_daemon(config: Config) -> Result<()> {
     });
 
     let run_result: Result<()> = async {
-        let mut last_classified = config.sensor.classify(initial_raw);
         loop {
             tokio::select! {
                 sample = sample_rx.recv() => {
@@ -157,11 +182,7 @@ pub async fn run_daemon(config: Config) -> Result<()> {
                     };
                     let changed = {
                         let mut current = state.write().expect("presence state lock poisoned");
-                        let changed = current.raw != raw || Some(present) != last_classified;
-                        current.available = true;
-                        current.raw = raw;
-                        current.present = present;
-                        changed
+                        current.apply_classified(raw, present)
                     };
                     if changed {
                         info!(raw, present, "presence state changed");
@@ -186,7 +207,6 @@ pub async fn run_daemon(config: Config) -> Result<()> {
                     } else {
                         debug!(raw, present, "presence sample");
                     }
-                    last_classified = Some(present);
                 }
                 _ = shutdown_signal() => {
                     info!("shutdown requested");
@@ -227,5 +247,45 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     {
         let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PresenceState;
+
+    #[test]
+    fn unmapped_initial_value_is_not_available() {
+        assert_eq!(
+            PresenceState::from_initial(81, None),
+            PresenceState {
+                available: false,
+                present: false,
+                raw: 81,
+            }
+        );
+    }
+
+    #[test]
+    fn first_classified_sample_makes_sensor_available() {
+        let mut state = PresenceState::from_initial(81, None);
+        assert!(state.apply_classified(2, false));
+        assert_eq!(
+            state,
+            PresenceState {
+                available: true,
+                present: false,
+                raw: 2,
+            }
+        );
+        assert!(!state.apply_classified(2, false));
+    }
+
+    #[test]
+    fn raw_changes_are_still_published_for_classified_values() {
+        let mut state = PresenceState::from_initial(1, Some(true));
+        assert!(state.apply_classified(3, true));
+        assert_eq!(state.raw, 3);
+        assert!(state.present);
     }
 }

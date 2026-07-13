@@ -41,6 +41,11 @@ so the system unit can be active while its install state is `disabled`. Mask
 the unit to prevent hardware activation. The user agent is managed separately
 with `systemctl --user`.
 
+Sensor values not listed in `present_values` or `away_values` are treated as
+unmapped. They are logged for diagnostics but never published as a presence
+transition; if the initial sample is unmapped, automation remains paused until
+the first classified sample arrives.
+
 Automatic display power-off defaults to disabled. It is forcibly blocked on
 AMDGPU Wayland systems where DMCUB/pageflip failures have been observed.
 `dry_run` evaluates and logs policy decisions without controlling the desktop.
