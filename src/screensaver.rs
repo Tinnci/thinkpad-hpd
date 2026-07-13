@@ -122,32 +122,42 @@ pub fn automatic_screen_off_supported() -> bool {
 }
 
 pub fn automatic_screen_off_block_reason() -> Option<&'static str> {
-    if env::var("XDG_SESSION_TYPE")
-        .map(|value| value != "wayland")
-        .unwrap_or(true)
-    {
-        return None;
-    }
-    let Ok(entries) = fs::read_dir("/sys/class/drm") else {
-        return None;
-    };
-    let amd_gpu = entries.flatten().any(|entry| {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        name.starts_with("card")
-            && !name.contains('-')
-            && fs::read_to_string(entry.path().join("device/vendor"))
-                .map(|vendor| vendor.trim().eq_ignore_ascii_case("0x1002"))
-                .unwrap_or(false)
-    });
-    amd_gpu.then_some("automatic display power-off is blocked on AMDGPU Wayland after observed DMCUB/pageflip failures")
+    let session_type = env::var("XDG_SESSION_TYPE").ok();
+    let amd_gpu = fs::read_dir("/sys/class/drm")
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("card")
+                && !name.contains('-')
+                && fs::read_to_string(entry.path().join("device/vendor"))
+                    .map(|vendor| vendor.trim().eq_ignore_ascii_case("0x1002"))
+                    .unwrap_or(false)
+        });
+    automatic_screen_off_block_reason_for(session_type.as_deref(), amd_gpu)
+}
+
+fn automatic_screen_off_block_reason_for(
+    session_type: Option<&str>,
+    amd_gpu: bool,
+) -> Option<&'static str> {
+    (session_type == Some("wayland") && amd_gpu).then_some(
+        "automatic display power-off is blocked on AMDGPU Wayland after observed DMCUB/pageflip failures",
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use super::automatic_screen_off_block_reason_for;
+
     #[test]
-    fn screen_off_guard_is_conservative_without_wayland_environment() {
-        unsafe { std::env::remove_var("XDG_SESSION_TYPE") };
-        assert!(super::automatic_screen_off_supported());
+    fn screen_off_guard_blocks_only_amdgpu_wayland() {
+        assert!(automatic_screen_off_block_reason_for(Some("wayland"), true).is_some());
+        assert!(automatic_screen_off_block_reason_for(Some("wayland"), false).is_none());
+        assert!(automatic_screen_off_block_reason_for(Some("x11"), true).is_none());
+        assert!(automatic_screen_off_block_reason_for(None, true).is_none());
     }
 }

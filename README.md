@@ -75,6 +75,8 @@ fields for both ASCII and translated text.
 Automatic display power-off defaults to disabled. It is forcibly blocked on
 AMDGPU Wayland systems where DMCUB/pageflip failures have been observed.
 `dry_run` evaluates and logs policy decisions without controlling the desktop.
+The safety gate is covered as a policy matrix: AMDGPU on Wayland is blocked,
+while non-AMD Wayland, X11 and unknown session types are not globally blocked.
 
 ## Build and install
 
