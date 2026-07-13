@@ -29,6 +29,7 @@ class HpdSettings final : public KQuickConfigModule
     Q_PROPERTY(QString diagnosticSummary MEMBER m_diagnosticSummary NOTIFY settingsChanged)
     Q_PROPERTY(bool serviceReady MEMBER m_serviceReady NOTIFY settingsChanged)
     Q_PROPERTY(QString serviceSummary MEMBER m_serviceSummary NOTIFY settingsChanged)
+    Q_PROPERTY(QString operationError MEMBER m_operationError NOTIFY settingsChanged)
 
 public:
     HpdSettings(QObject *parent, const KPluginMetaData &data)
@@ -40,10 +41,18 @@ public:
 
     void load() override
     {
-        QProcess process;
-        process.start(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("get")});
-        process.waitForFinished();
-        const auto object = QJsonDocument::fromJson(process.readAllStandardOutput()).object();
+        m_operationError.clear();
+        QByteArray output;
+        QString commandError;
+        if (!runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("get")}, &output, &commandError)) {
+            m_operationError = i18n("Could not read HPD settings: %1", commandError);
+        }
+        QJsonParseError parseError;
+        const auto document = QJsonDocument::fromJson(output, &parseError);
+        if (!output.isEmpty() && (parseError.error != QJsonParseError::NoError || !document.isObject())) {
+            m_operationError = i18n("Could not read HPD settings: %1", parseError.errorString());
+        }
+        const auto object = document.object();
         m_enabled = object[QStringLiteral("enabled")].toBool(true);
         m_dryRun = object[QStringLiteral("dry_run")].toBool(true);
         m_lockScreen = object[QStringLiteral("lock_screen")].toBool(true);
@@ -60,10 +69,11 @@ public:
         m_osdCooldown = object[QStringLiteral("osd_cooldown_seconds")].toInt(5);
         m_presentText = object[QStringLiteral("osd_present_text")].toString(QStringLiteral("HPD: 检测到用户"));
         m_awayText = object[QStringLiteral("osd_away_text")].toString(QStringLiteral("HPD: 用户已离开"));
-        QProcess diagnostics;
-        diagnostics.start(QStringLiteral("thinkpad-hpd"), {QStringLiteral("diagnose")});
-        diagnostics.waitForFinished();
-        const auto diagnosticObject = QJsonDocument::fromJson(diagnostics.readAllStandardOutput()).object();
+        QByteArray diagnosticOutput;
+        if (!runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("diagnose")}, &diagnosticOutput, &commandError)) {
+            m_operationError = i18n("Could not run HPD diagnostics: %1", commandError);
+        }
+        const auto diagnosticObject = QJsonDocument::fromJson(diagnosticOutput).object();
         m_screenOffSupported = diagnosticObject[QStringLiteral("screen_off_supported")].toBool(false);
         const auto reason = diagnosticObject[QStringLiteral("screen_off_block_reason")].toString();
         const auto sensorAvailable = diagnosticObject[QStringLiteral("sensor")].toObject()[QStringLiteral("available")].toBool(false);
@@ -72,18 +82,11 @@ public:
             m_diagnosticSummary += QStringLiteral(". ")
                 + i18n("Automatic display power-off is blocked on AMDGPU Wayland after observed display failures.");
         }
-        QProcess daemonState;
-        daemonState.start(QStringLiteral("systemctl"), {QStringLiteral("is-active"), QStringLiteral("thinkpad-hpd.service")});
-        daemonState.waitForFinished();
-        QProcess daemonEnabled;
-        daemonEnabled.start(QStringLiteral("systemctl"), {QStringLiteral("is-enabled"), QStringLiteral("thinkpad-hpd.service")});
-        daemonEnabled.waitForFinished();
-        const bool daemonActive = daemonState.exitCode() == 0;
-        const bool daemonMasked = QString::fromUtf8(daemonEnabled.readAllStandardOutput()).trimmed() == QStringLiteral("masked");
-        QProcess agentState;
-        agentState.start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("is-active"), QStringLiteral("thinkpad-hpd-agent.service")});
-        agentState.waitForFinished();
-        const bool agentActive = agentState.exitCode() == 0;
+        QByteArray daemonEnabledOutput;
+        const bool daemonActive = runCommand(QStringLiteral("systemctl"), {QStringLiteral("is-active"), QStringLiteral("thinkpad-hpd.service")}, nullptr, nullptr);
+        runCommand(QStringLiteral("systemctl"), {QStringLiteral("is-enabled"), QStringLiteral("thinkpad-hpd.service")}, &daemonEnabledOutput, nullptr, true);
+        const bool daemonMasked = QString::fromUtf8(daemonEnabledOutput).trimmed() == QStringLiteral("masked");
+        const bool agentActive = runCommand(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("is-active"), QStringLiteral("thinkpad-hpd-agent.service")}, nullptr, nullptr);
         m_serviceReady = daemonActive && (!m_enabled || agentActive);
         const QString daemonText = daemonMasked ? i18n("masked") : (daemonActive ? i18n("active") : i18n("inactive"));
         const QString agentText = agentActive ? i18n("active") : i18n("inactive");
@@ -103,25 +106,27 @@ public:
             {QStringLiteral("wake_screen"), m_wake}, {QStringLiteral("wake_manual_lock"), m_wakeManualLock},
             {QStringLiteral("show_osd"), m_showOsd}, {QStringLiteral("osd_cooldown_seconds"), m_osdCooldown},
             {QStringLiteral("osd_present_text"), m_presentText}, {QStringLiteral("osd_away_text"), m_awayText}};
-        QProcess process;
-        process.start(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("set"),
-            QStringLiteral("--json"), QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact))});
-        process.waitForFinished();
-        if (process.exitCode() == 0) {
+        m_operationError.clear();
+        QString commandError;
+        if (runCommand(QStringLiteral("thinkpad-hpd"), {QStringLiteral("settings"), QStringLiteral("set"),
+            QStringLiteral("--json"), QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact))}, nullptr, &commandError)) {
             const QStringList serviceArguments = m_enabled
                 ? QStringList{QStringLiteral("--user"), QStringLiteral("enable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")}
                 : QStringList{QStringLiteral("--user"), QStringLiteral("disable"), QStringLiteral("--now"), QStringLiteral("thinkpad-hpd-agent.service")};
-            const int serviceResult = QProcess::execute(QStringLiteral("systemctl"), serviceArguments);
-            if (serviceResult == 0) {
+            if (runCommand(QStringLiteral("systemctl"), serviceArguments, nullptr, &commandError)) {
                 setNeedsSave(false);
                 load();
             } else {
-                qWarning() << "Failed to update HPD desktop agent state, exit code:" << serviceResult;
+                m_operationError = i18n("Could not update the HPD desktop agent: %1", commandError);
+                qWarning() << m_operationError;
                 setNeedsSave(true);
+                Q_EMIT settingsChanged();
             }
         } else {
-            qWarning() << "Failed to save HPD settings:" << process.readAllStandardError();
+            m_operationError = i18n("Could not save HPD settings: %1", commandError);
+            qWarning() << m_operationError;
             setNeedsSave(true);
+            Q_EMIT settingsChanged();
         }
     }
 
@@ -138,6 +143,39 @@ public:
 Q_SIGNALS:
     void settingsChanged();
 private:
+    static bool runCommand(const QString &program, const QStringList &arguments, QByteArray *standardOutput,
+        QString *errorText, bool acceptNonZeroExit = false)
+    {
+        QProcess process;
+        process.start(program, arguments);
+        if (!process.waitForStarted(3000)) {
+            if (errorText) {
+                *errorText = process.errorString();
+            }
+            return false;
+        }
+        if (!process.waitForFinished(5000)) {
+            process.kill();
+            process.waitForFinished(1000);
+            if (errorText) {
+                *errorText = i18n("Command timed out");
+            }
+            return false;
+        }
+        if (standardOutput) {
+            *standardOutput = process.readAllStandardOutput();
+        }
+        const bool succeeded = process.exitStatus() == QProcess::NormalExit
+            && (acceptNonZeroExit || process.exitCode() == 0);
+        if (!succeeded && errorText) {
+            const QString standardError = QString::fromUtf8(process.readAllStandardError()).trimmed();
+            *errorText = standardError.isEmpty()
+                ? i18n("Command exited with status %1", process.exitCode())
+                : standardError;
+        }
+        return succeeded;
+    }
+
     int m_away = 15, m_idle = 15, m_startupGrace = 10, m_present = 750, m_osdDelay = 1000, m_osdCooldown = 5, m_screenOffDelay = 750;
     bool m_enabled = true, m_dryRun = true, m_lockScreen = true, m_turnOff = false, m_wake = true, m_wakeManualLock = false, m_showOsd = true;
     QString m_presentText, m_awayText;
@@ -145,6 +183,7 @@ private:
     QString m_diagnosticSummary;
     bool m_serviceReady = false;
     QString m_serviceSummary;
+    QString m_operationError;
 };
 
 K_PLUGIN_CLASS_WITH_JSON(HpdSettings, "kcm_thinkpadhpd.json")

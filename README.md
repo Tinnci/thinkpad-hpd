@@ -102,6 +102,9 @@ sudo cmake --install build-kcm
 The KCM uses KDE KI18n/gettext. English source strings and Simplified Chinese
 translations are included. Additional languages can be added as
 `kcm/po/<locale>/kcm_thinkpadhpd.po`.
+External CLI and systemd operations in the KCM have bounded waits and report
+localized inline errors instead of silently failing or freezing System
+Settings.
 
 See [docs/analysis.md](docs/analysis.md) for the hardware protocol, kernel and
 `iio-sensor-proxy` compatibility analysis.

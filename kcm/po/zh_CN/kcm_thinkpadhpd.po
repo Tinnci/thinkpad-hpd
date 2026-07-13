@@ -90,3 +90,21 @@ msgstr "已屏蔽"
 
 msgid "Sensor service: %1; desktop agent: %2"
 msgstr "传感器服务：%1；桌面代理：%2"
+
+msgid "Could not read HPD settings: %1"
+msgstr "无法读取 HPD 设置：%1"
+
+msgid "Could not run HPD diagnostics: %1"
+msgstr "无法运行 HPD 诊断：%1"
+
+msgid "Could not update the HPD desktop agent: %1"
+msgstr "无法更新 HPD 桌面代理：%1"
+
+msgid "Could not save HPD settings: %1"
+msgstr "无法保存 HPD 设置：%1"
+
+msgid "Command timed out"
+msgstr "命令执行超时"
+
+msgid "Command exited with status %1"
+msgstr "命令退出，状态码为 %1"

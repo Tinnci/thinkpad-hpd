@@ -8,6 +8,7 @@ KCM.SimpleKCM {
         anchors.fill: parent
 
         QQC2.Switch { Kirigami.FormData.label: i18n("Human presence:"); text: i18n("Enable presence automation"); checked: kcm.enabled; onToggled: { kcm.enabled = checked; kcm.changed() } }
+        Kirigami.InlineMessage { Kirigami.FormData.isSection: true; visible: kcm.operationError.length > 0; type: Kirigami.MessageType.Error; text: kcm.operationError }
         QQC2.CheckBox { text: i18n("Simulation only (do not control the desktop)"); enabled: kcm.enabled; checked: kcm.dryRun; onToggled: { kcm.dryRun = checked; kcm.changed() } }
         Kirigami.InlineMessage { Kirigami.FormData.isSection: true; visible: true; type: kcm.screenOffSupported ? Kirigami.MessageType.Information : Kirigami.MessageType.Warning; text: kcm.diagnosticSummary }
         Kirigami.InlineMessage { Kirigami.FormData.isSection: true; visible: true; type: kcm.serviceReady ? (kcm.enabled ? Kirigami.MessageType.Positive : Kirigami.MessageType.Information) : Kirigami.MessageType.Warning; text: kcm.serviceSummary }
